@@ -7,6 +7,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
 <style>
 :root{
   --night:#0b1611; --board:#143b2d; --board-2:#0e2a20; --edge:#2b5b48;
@@ -1270,7 +1271,7 @@ async function pickGhost() {
   if (!best) { $('#pace').hidden = true; return; }
   let label = RUN_MODE === 'daily' ? 'your run today' : 'your best run';
   if (best.id && best.id !== myId && USER) { const ps = await USER.profiles([best.id]); label = `${(ps[best.id] && ps[best.id].name) || 'Top run'}’s best`; }
-  else if (best.id && best.id !== myId) label = 'the top run';
+  else if (best.id && best.id !== myId) label = `${cleanIni((players.get(best.id) || {}).initials) || 'Top run'}’s best`;
   G.ghost.label = label;
   updPace();
 }
@@ -1532,37 +1533,73 @@ const TABS = {
   streak: { key: 'bestStreak', fmt: v => String(v) },
   hr: { key: 'longestHR', fmt: v => v + ' ft' }
 };
+/* Supabase backend (PickEm project, sweet_spot_ table) */
+const SUPA_URL = 'https://yeykyutsbeqjcgdxlucn.supabase.co';
+const SUPA_KEY = 'sb_publishable_SLM96UPQ3Rgrf6MTpXRZUQ_LklkFhPH';
+let SB = null;
+function randHex(n) { const a = new Uint8Array(n); crypto.getRandomValues(a); return [...a].map(b => b.toString(16).padStart(2, '0')).join(''); }
+function uuid4() { if (crypto.randomUUID) return crypto.randomUUID(); const h = randHex(16); return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`; }
+function identity() {
+  let id = store.get('ss.pid', null), sec = store.get('ss.psec', null);
+  if (!id || !sec) { id = uuid4(); sec = randHex(24); store.set('ss.pid', id); store.set('ss.psec', sec); }
+  return { id, sec };
+}
+function colorFor(id) { let h = 0; for (const c of String(id || '')) h = (h * 31 + c.charCodeAt(0)) >>> 0; return `hsl(${h % 360} 75% 66%)`; }
+function supaRoom(sb, pid) {
+  const ch = sb.channel('sweet-spot-field', { config: { presence: { key: pid }, broadcast: { self: false } } });
+  const handlers = {}, peerCbs = [];
+  let state = {}, ready = false, pending = null;
+  ch.on('presence', { event: 'sync' }, () => { state = ch.presenceState(); peerCbs.forEach(f => f()); });
+  ch.on('broadcast', { event: 'hit' }, ({ payload }) => (handlers.hit || []).forEach(f => f({ by: payload && payload.by, data: payload, isMe: false })));
+  ch.on('broadcast', { event: 'board' }, () => (handlers.board || []).forEach(f => f()));
+  ch.subscribe(st => { if (st === 'SUBSCRIBED') { ready = true; if (pending) ch.track(pending); } });
+  return {
+    presence(p) { pending = p; return ready ? ch.track(p) : Promise.resolve(); },
+    peers() { return Object.entries(state).map(([k, arr]) => ({ by: k, isMe: k === pid, presence: (arr && arr[0]) || null })); },
+    onPeers(f) { peerCbs.push(f); },
+    on(t, f) { (handlers[t] = handlers[t] || []).push(f); },
+    emit(t, data) { return ch.send({ type: 'broadcast', event: t, payload: Object.assign({}, data, { by: pid }) }); }
+  };
+}
+async function fetchBoard() {
+  if (!SB) return;
+  const { data, error } = await SB.from('sweet_spot_players')
+    .select('id,initials,best_score,best_streak,longest_hr,ghost,daily_date,daily_best,daily_ghost')
+    .order('best_score', { ascending: false }).limit(500);
+  if (error) { if (!players.size) { DB = null; localBoard(); } return; }
+  DB = DB || {};
+  players.clear();
+  for (const r of data) players.set(r.id, {
+    initials: r.initials, bestScore: r.best_score, bestStreak: r.best_streak, longestHR: r.longest_hr,
+    ghost: r.ghost, dailyDate: r.daily_date, dailyBest: r.daily_best, dailyGhost: r.daily_ghost
+  });
+  renderBoard();
+}
 async function initCloud() {
-  if (!window.claude || typeof window.claude.use !== 'function') { localBoard(); return; }
-  const [db, user, room] = await Promise.all([
-    window.claude.use('db').catch(() => null),
-    window.claude.use('user').catch(() => null),
-    window.claude.use('room').catch(() => null)
-  ]);
-  DB = db; USER = user; ROOM = room;
-  if (USER) { try { myId = await USER.id(); } catch (e) { myId = null; } }
-  if (DB) {
-    DB.collection('players').limit(500).onSnapshot(snap => {
-      players.clear();
-      snap.docs.forEach(d => { if (d.exists) players.set(d.id, d.data()); });
-      renderBoard();
-    }, () => { DB = null; localBoard(); });
-  } else localBoard();
-  if (ROOM) {
+  if (!window.supabase || typeof window.supabase.createClient !== 'function') { localBoard(); return; }
+  try {
+    SB = window.supabase.createClient(SUPA_URL, SUPA_KEY, { auth: { persistSession: false, autoRefreshToken: false } });
+  } catch (e) { localBoard(); return; }
+  myId = identity().id;
+  DB = {};
+  await fetchBoard();
+  setInterval(() => { if (!document.hidden) fetchBoard(); }, 45000);
+  try {
+    ROOM = supaRoom(SB, myId);
     ROOM.onPeers(() => renderLive());
+    ROOM.on('board', () => fetchBoard());
     ROOM.on('hit', m => {
-      if (m.isMe) return;
       const d = m.data || {};
       const a = +d.a, dist = +d.d;
       if (!isFinite(a) || !isFinite(dist) || dist < 0 || dist > 520 || Math.abs(a) > 60) return;
       addGhostHit(m.by, a, dist, d.k === 'hr' ? 'hr' : String(d.k || ''));
     });
     pushPresence();
-  }
+  } catch (e) { ROOM = null; }
 }
 async function addGhostHit(by, aDeg, dist, kind) {
-  let color = '#7fc6ff', name = 'Someone', avatar = '';
-  if (by && USER) { const ps = await USER.profiles([by]); const p = ps[by]; if (p) { color = p.color || color; name = p.name || name; avatar = p.avatarUrl; } }
+  let color = colorFor(by), name = 'Someone', avatar = '';
+  if (ROOM) { const peer = ROOM.peers().find(p => p.by === by); if (peer && peer.presence && cleanIni(peer.presence.ini)) name = cleanIni(peer.presence.ini); }
   ghostHits.push({ a: aDeg * D2R, d: dist, k: kind, start: performance.now(), color });
   if (ghostHits.length > 24) ghostHits.shift();
   const pIni = cleanIni((players.get(by) || {}).initials);
@@ -1595,7 +1632,7 @@ function localBoard() {
     li.querySelector('.vl').textContent = tab.fmt(v);
     ol.appendChild(li);
   }
-  $('#boardNote').textContent = 'The shared board is live when this page is open on claude.ai while signed in. Your bests are kept on this device in the meantime.';
+  $('#boardNote').textContent = 'Can\'t reach the shared leaderboard right now. Your bests are kept on this device in the meantime.';
 }
 async function renderBoard() {
   if (!DB) { localBoard(); return; }
@@ -1636,7 +1673,8 @@ async function renderLive() {
   for (const p of peers) {
     const pr = (p.by && ps[p.by]) || {};
     const li = document.createElement('li');
-    const img = document.createElement('img'); img.alt = ''; if (pr.avatarUrl) img.src = pr.avatarUrl;
+    const img = document.createElement('img'); img.alt = '';
+    if (pr.avatarUrl) img.src = pr.avatarUrl; else { img.src = 'data:image/gif;base64,R0lGODlhAQABAAAAACw='; img.style.background = colorFor(p.by); }
     const mid = document.createElement('div');
     const pIni = cleanIni(p.presence.ini) || cleanIni((players.get(p.by) || {}).initials);
     const nm = document.createElement('div'); nm.className = 'nm'; nm.textContent = pIni ? `${pIni}  ${pr.name || ''}`.trim() : (pr.name || 'Player');
@@ -1660,55 +1698,34 @@ function toast(avatar, text) {
   setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, 4200);
 }
 async function submitRun(isPB, initials) {
-  if (!DB || !myId || !cloudWrite) {
-    if (!DB) $('#oNote').textContent = 'Saved on this device. Open this page on claude.ai while signed in to post to the shared board.';
+  if (!SB || !myId) {
+    $('#oNote').textContent = 'Couldn’t reach the leaderboard. This run is saved on this device.';
     return;
   }
   const prev = players.get(myId) || {};
+  const today = todayKey();
+  const { sec } = identity();
+  const ini = cleanIni(initials) || cleanIni(prev.initials) || null;
+  const { error } = await SB.rpc('sweet_spot_submit', {
+    p_id: myId, p_secret: sec, p_initials: ini,
+    p_score: G.score, p_streak: G.runBestStreak, p_hr: G.longestHR, p_homers: G.hrs,
+    p_pace: G.pace.slice(0, 400), p_daily: RUN_MODE === 'daily'
+  });
+  if (error) {
+    $('#oNote').textContent = 'Couldn’t reach the leaderboard just now. This run is saved on this device.';
+    return;
+  }
   const beatCloud = G.score > (+prev.bestScore || 0);
-  const doc = {
-    bestScore: Math.max(+prev.bestScore || 0, G.score),
-    bestStreak: Math.max(+prev.bestStreak || 0, G.runBestStreak),
-    longestHR: Math.max(+prev.longestHR || 0, G.longestHR),
-    runs: (+prev.runs || 0) + 1,
-    homers: (+prev.homers || 0) + G.hrs,
-    updatedAt: Date.now()
-  };
-  const ini = cleanIni(initials) || cleanIni(prev.initials);
-  if (ini) doc.initials = ini;
-  const ghost = beatCloud ? G.pace.slice(0, 400) : (Array.isArray(prev.ghost) ? prev.ghost : null);
-  if (ghost) doc.ghost = ghost;
-  const today = todayKey(), sameDay = prev.dailyDate === today;
-  let beatDaily = false;
-  if (RUN_MODE === 'daily') {
-    beatDaily = !sameDay || G.score > (+prev.dailyBest || 0);
-    doc.dailyDate = today;
-    doc.dailyBest = beatDaily ? G.score : +prev.dailyBest || 0;
-    const dg = beatDaily ? G.pace.slice(0, 400) : prev.dailyGhost;
-    if (Array.isArray(dg)) doc.dailyGhost = dg;
-  } else if (prev.dailyDate) {
-    doc.dailyDate = prev.dailyDate; doc.dailyBest = +prev.dailyBest || 0;
-    if (Array.isArray(prev.dailyGhost)) doc.dailyGhost = prev.dailyGhost;
+  const beatDaily = RUN_MODE === 'daily' && (prev.dailyDate !== today || G.score > (+prev.dailyBest || 0));
+  if (beatDaily) {
+    const rank = [...players.entries()].filter(([id, d]) => id !== myId && d.dailyDate === today && (+d.dailyBest || 0) > G.score).length + 1;
+    $('#oNote').textContent = rank === 1 ? 'You lead today\'s challenge.' : `You're #${rank} in today's challenge.`;
+  } else if (beatCloud) {
+    const rank = [...players.entries()].filter(([id, d]) => id !== myId && (+d.bestScore || 0) > G.score).length + 1;
+    $('#oNote').textContent = rank === 1 ? 'That puts you at the top of the board.' : `That puts you at #${rank} on the board.`;
   }
-  try {
-    await DB.collection('players').doc(myId).set(doc);
-    if (RUN_MODE === 'daily' && beatDaily) {
-      const rank = [...players.entries()].filter(([id, d]) => id !== myId && d.dailyDate === today && (+d.dailyBest || 0) > G.score).length + 1;
-      $('#oNote').textContent = rank === 1 ? 'You lead today\'s challenge.' : `You're #${rank} in today's challenge.`;
-    } else if (beatCloud) {
-      const rank = [...players.values()].filter(d => (+d.bestScore || 0) > doc.bestScore).length + 1;
-      $('#oNote').textContent = rank === 1 ? 'That puts you at the top of the board.' : `That puts you at #${rank} on the board.`;
-    }
-  } catch (e) {
-    if (e && e.code === 'invalid_argument') {
-      cloudWrite = false;
-      $('#oNote').textContent = 'Saved on this device. You can view the board, but posting needs Contributor access from the page owner.';
-    } else if (e && e.code === 'quota_exceeded') {
-      $('#oNote').textContent = 'The board is full right now, so this run was saved on this device only.';
-    } else {
-      $('#oNote').textContent = 'Couldn’t reach the board just now. This run is saved on this device.';
-    }
-  }
+  await fetchBoard();
+  if (ROOM) { try { ROOM.emit('board', {}).catch(() => {}); } catch (e) {} }
 }
 
 /* =========================================================
