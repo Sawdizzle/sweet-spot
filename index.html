@@ -220,6 +220,25 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .slot.locked .ch{color:#ffc35e}
 @keyframes blinkCh{50%{opacity:.3}}
 .ini-hint{margin:10px 0 16px;font:500 13.5px/1.4 var(--ui);color:var(--chalk-dim)}
+/* Touch: tap-to-type keypad replaces the per-letter arrows */
+html,button,.ch{touch-action:manipulation}
+.kb{display:none}
+#ini.touch .kb{display:grid;gap:6px;width:min(100%,430px);margin:0 0 4px}
+.kb .kr{display:flex;gap:5px}
+.kb .kr.in{padding:0 5%}
+.kb button{flex:1 1 0;min-width:0;height:44px;padding:0;border:1px solid rgba(255,166,48,.3);border-radius:7px;background:#160c03;color:#ffa630;font:800 23px/1 var(--display);cursor:pointer}
+.kb button:active{background:#ffa630;color:#160c03}
+.kb .bk{flex:1.55 1 0}
+.kb .bk svg{width:24px;height:24px;display:block;margin:auto}
+.kb .go{height:48px;border-color:var(--chalk);background:var(--chalk);color:#10261d;font-size:25px}
+.kb .go:active{background:#fff;color:#10261d}
+#ini.touch .slot button,#ini.touch .ini-go{display:none}
+#ini.touch .dmd{padding:6px 14px}
+#ini.touch .slot .ch{width:58px;font-size:70px}
+#ini.touch .ini-hint{margin:8px 0 10px}
+#app.entering .stats,#app.entering .oline,#app.entering .ctl{display:none}
+#app.entering #over .card{width:100%}
+#app.entering .oscore{margin:10px 0 14px;font-size:60px}
 @media (min-width:641px) and (max-height:900px){ .lede{display:none} .seam{margin-bottom:12px} }
 @media (max-width:640px){
   .sb{grid-template-columns:repeat(6,1fr);gap:3px;padding:4px}
@@ -343,7 +362,8 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
         <p class="ini-h" id="iniHead">New high score</p>
         <div class="dmd" id="slots"></div>
         <p class="ini-hint" id="iniHint">Up and down pick a letter, Enter locks it in. You can also just type.</p>
-        <span class="plate-wrap"><button class="plate" id="iniGo">Register</button></span>
+        <div class="kb" id="kb" aria-label="Initials keypad"></div>
+        <span class="plate-wrap ini-go"><button class="plate" id="iniGo">Register</button></span>
       </div>
       <div class="orow" id="oActions">
         <span class="plate-wrap"><button class="plate" id="again">Swing again</button></span>
@@ -1407,16 +1427,36 @@ const cleanIni = v => (typeof v === 'string' && /^[A-Z0-9]{1,3}$/.test(v)) ? v :
     box.appendChild(sl);
   }
 })();
+(function buildKeypad() {
+  const kb = $('#kb');
+  ['1234567890', 'QWERTYUIOP', 'ASDFGHJKL', '<ZXCVBNM'].forEach((keys, r) => {
+    const row = document.createElement('div'); row.className = 'kr' + (r === 2 ? ' in' : '');
+    for (const c of keys) {
+      const b = document.createElement('button'); b.type = 'button';
+      if (c === '<') {
+        b.className = 'bk'; b.setAttribute('aria-label', 'Back one letter');
+        b.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 5h11v14H9l-6-7z"/><path d="M13 9.5l4 5M17 9.5l-4 5"/></svg>';
+        b.addEventListener('click', () => iniMove(-1));
+      } else { b.textContent = c; b.addEventListener('click', () => iniType(c)); }
+      row.appendChild(b);
+    }
+    kb.appendChild(row);
+  });
+  const go = document.createElement('button'); go.type = 'button'; go.className = 'go'; go.textContent = 'Register';
+  go.addEventListener('click', () => iniDone());
+  kb.appendChild(go);
+})();
 function iniOpen(done) {
   const saved = cleanIni(store.get('ss.ini', '')) || 'AAA';
   INI.ch = [0, 1, 2].map(i => Math.max(0, CHARS.indexOf(saved[i] || 'A')));
   INI.pos = 0; INI.active = true; INI.done = done;
   $('#ini').hidden = false; $('#oActions').hidden = true;
-  $('#iniHint').textContent = TOUCH ? 'Tap the arrows to pick each letter, then Register.' : 'Up and down pick a letter, Enter locks it in. You can also just type.';
+  $('#ini').classList.toggle('touch', TOUCH); app.classList.toggle('entering', TOUCH);
+  $('#iniHint').textContent = TOUCH ? 'Type three initials. Tap a slot to change it.' : 'Up and down pick a letter, Enter locks it in. You can also just type.';
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   iniRender();
 }
-function iniClose() { INI.active = false; INI.done = null; $('#ini').hidden = true; $('#oActions').hidden = false; }
+function iniClose() { INI.active = false; INI.done = null; $('#ini').hidden = true; $('#oActions').hidden = false; app.classList.remove('entering'); }
 function iniRender() {
   [...$('#slots').children].forEach((el, i) => {
     el.querySelector('.ch').textContent = CHARS[INI.ch[i]];
@@ -1424,8 +1464,9 @@ function iniRender() {
     el.classList.toggle('locked', i < INI.pos);
   });
 }
-function iniStep(d) { INI.ch[INI.pos] = (INI.ch[INI.pos] + d + CHARS.length) % CHARS.length; sfx.tick(); iniRender(); }
+function iniStep(d) { INI.pos = Math.min(INI.pos, 2); INI.ch[INI.pos] = (INI.ch[INI.pos] + d + CHARS.length) % CHARS.length; sfx.tick(); iniRender(); }
 function iniMove(d) { INI.pos = clamp(INI.pos + d, 0, 2); sfx.tick(); iniRender(); }
+function iniType(c) { if (INI.pos > 2) return; INI.ch[INI.pos++] = CHARS.indexOf(c.toUpperCase()); sfx.tick(); iniRender(); } // pos 3 = all typed
 function iniLock() { if (INI.pos < 2) { INI.pos++; sfx.lock(); iniRender(); } else iniDone(); }
 function iniDone() {
   if (!INI.active) return;
@@ -1444,7 +1485,7 @@ function iniKey(e) {
   else if (k === 'ArrowLeft' || k === 'Backspace') iniMove(-1);
   else if (k === 'ArrowRight') iniMove(1);
   else if (k === 'Enter' || k === ' ' || e.code === 'Space') { if (!e.repeat) iniLock(); }
-  else if (/^[a-z0-9]$/i.test(k)) { INI.ch[INI.pos] = CHARS.indexOf(k.toUpperCase()); if (INI.pos < 2) INI.pos++; sfx.tick(); iniRender(); }
+  else if (/^[a-z0-9]$/i.test(k)) iniType(k);
   else if (k === 'Tab') return;
   else return;
   e.preventDefault();
