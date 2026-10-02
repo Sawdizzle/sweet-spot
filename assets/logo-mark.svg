@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Sweet Spot">
+  <defs>
+    <radialGradient id="dg" cx="50%" cy="46%" r="60%">
+      <stop offset="0" stop-color="#226049"/><stop offset="1" stop-color="#103024"/>
+    </radialGradient>
+  </defs>
+  <circle cx="256" cy="256" r="232" fill="url(#dg)"/>
+  <circle cx="256" cy="256" r="232" fill="none" stroke="#ffb547" stroke-width="46.800000000000004" opacity=".16"/>
+  <circle cx="256" cy="256" r="232" fill="none" stroke="#ffb547" stroke-width="18"/>
+  <defs>
+    <radialGradient id="bg" cx="38%" cy="32%" r="78%">
+      <stop offset="0" stop-color="#fffdf6"/><stop offset=".55" stop-color="#f1ece0"/><stop offset="1" stop-color="#cfc7b2"/>
+    </radialGradient>
+    <clipPath id="bc"><circle cx="256" cy="256" r="170"/></clipPath>
+  </defs>
+  <circle cx="256" cy="267.9" r="170" fill="#000" opacity=".28"/>
+  <circle cx="256" cy="256" r="170" fill="url(#bg)"/>
+  <g clip-path="url(#bc)"><g transform="rotate(-24 256 256)">
+    <circle cx="14.6" cy="256" r="156.4" fill="none" stroke="#d23a2e" stroke-width="10.54"/>
+    <line x1="120.6" y1="162.1" x2="154.1" y2="156.0" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="136.5" y1="184.0" x2="170.5" y2="184.3" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="148.0" y1="208.4" x2="181.3" y2="215.2" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="154.6" y1="234.6" x2="186.0" y2="247.6" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="156.1" y1="261.5" x2="184.5" y2="280.3" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="152.5" y1="288.3" x2="176.8" y2="312.1" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="143.9" y1="313.9" x2="163.2" y2="341.8" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="130.5" y1="337.3" x2="144.2" y2="368.5" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <circle cx="497.4" cy="256" r="156.4" fill="none" stroke="#d23a2e" stroke-width="10.54"/>
+    <line x1="381.5" y1="337.3" x2="367.8" y2="368.5" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="368.1" y1="313.9" x2="348.8" y2="341.8" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="359.5" y1="288.3" x2="335.2" y2="312.1" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="355.9" y1="261.5" x2="327.5" y2="280.3" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="357.4" y1="234.6" x2="326.0" y2="247.6" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="364.0" y1="208.4" x2="330.7" y2="215.2" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="375.5" y1="184.0" x2="341.5" y2="184.3" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+    <line x1="391.4" y1="162.1" x2="357.9" y2="156.0" stroke="#d23a2e" stroke-width="8.84" stroke-linecap="round"/>
+  </g></g>
+</svg>
