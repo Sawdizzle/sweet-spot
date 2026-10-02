@@ -84,7 +84,7 @@ button{font:inherit;color:inherit}
 .cap .sp{flex:1}
 
 /* ---------- Controls, toasts ---------- */
-.ctl{position:absolute;right:calc(var(--panel-w) + 14px);bottom:16px;display:flex;gap:8px;z-index:9;transition:right .35s cubic-bezier(.2,.8,.2,1)}
+.ctl{position:absolute;right:calc(var(--panel-w) + 14px);bottom:16px;display:flex;gap:8px;z-index:13;transition:right .35s cubic-bezier(.2,.8,.2,1)}
 .ctl button{height:42px;min-width:42px;padding:0 14px;border-radius:21px;border:1px solid rgba(241,236,224,.22);background:rgba(10,26,20,.82);color:var(--chalk);font:600 14px/1 var(--ui);display:flex;align-items:center;gap:8px;cursor:pointer;backdrop-filter:blur(6px)}
 .ctl button:hover{border-color:rgba(241,236,224,.5)}
 .ctl button svg{width:18px;height:18px}
@@ -97,7 +97,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 @keyframes toastOut{to{opacity:0;transform:translateX(30px)}}
 
 /* ---------- Leaderboard panel ---------- */
-#panel{position:absolute;top:0;right:0;bottom:0;width:340px;max-width:100%;z-index:8;display:flex;flex-direction:column;padding:calc(18px + env(safe-area-inset-top,0px)) 18px 18px;background:linear-gradient(180deg,rgba(17,46,35,.96),rgba(9,24,18,.97));border-left:1px solid var(--chalk-faint);transform:translateX(102%);transition:transform .35s cubic-bezier(.2,.8,.2,1);overflow-y:auto;-webkit-user-select:text;user-select:text}
+#panel{position:absolute;top:0;right:0;bottom:0;width:340px;max-width:100%;z-index:12;display:flex;flex-direction:column;padding:calc(18px + env(safe-area-inset-top,0px)) 18px 18px;background:linear-gradient(180deg,rgba(17,46,35,.96),rgba(9,24,18,.97));border-left:1px solid var(--chalk-faint);transform:translateX(102%);transition:transform .35s cubic-bezier(.2,.8,.2,1);overflow-y:auto;-webkit-user-select:text;user-select:text}
 #app.panel-open #panel{transform:none}
 .phead{display:flex;align-items:center;justify-content:space-between}
 .phead h2{margin:0;font:800 30px/1 var(--display)}
