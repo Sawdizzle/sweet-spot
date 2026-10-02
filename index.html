@@ -317,7 +317,8 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
       </div>
       <div class="orow" id="oActions">
         <span class="plate-wrap"><button class="plate" id="again">Swing again</button></span>
-        <button class="ghost-btn" id="seeBoard">See the leaderboard</button>
+        <button class="ghost-btn" id="toMenu">Main menu</button>
+        <button class="ghost-btn" id="seeBoard">Leaderboard</button>
       </div>
       <p class="note" id="oNote"></p>
     </div>
@@ -1436,6 +1437,7 @@ window.addEventListener('keydown', e => {
   } else if (e.key === 'l' || e.key === 'L') togglePanel();
   else if (e.key === 'm' || e.key === 'M') toggleMute();
   else if (e.key === 'Escape' && app.classList.contains('panel-open') && !app.classList.contains('wide')) togglePanel(false);
+  else if (e.key === 'Escape' && $('#over').classList.contains('show')) toMenu();
 });
 cvs.addEventListener('pointerdown', e => {
   if (overlayUp() || G.demo) return;
@@ -1445,6 +1447,16 @@ cvs.addEventListener('pointerdown', e => {
 $('#play').addEventListener('click', startRun);
 $('#again').addEventListener('click', startRun);
 $('#seeBoard').addEventListener('click', () => togglePanel(true));
+function toMenu() {
+  if (INI.active) return;
+  $('#over').classList.remove('show');
+  $('#menu').classList.add('show');
+  renderOpts();
+  $('#menuBest').innerHTML = local.bestScore > 0 ? `Your best: <strong>${local.bestScore.toLocaleString()}</strong>. ${startHint}` : startHint;
+  if (!app.classList.contains('wide')) app.classList.remove('panel-open');
+  setTimeout(() => $('#play').focus({ preventScroll: true }), 50);
+}
+$('#toMenu').addEventListener('click', toMenu);
 $('#panelToggle').addEventListener('click', () => togglePanel());
 $('#closePanel').addEventListener('click', () => togglePanel(false));
 function togglePanel(force) {
