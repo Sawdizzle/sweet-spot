@@ -175,6 +175,7 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .plate:active{transform:translateY(2px)}
 .plate:focus-visible{outline:none}
 .hint{margin:14px 0 0;font:500 13.5px/1.4 var(--ui);color:var(--chalk-dim)}
+.hint a{color:var(--amber);text-decoration:none;border-bottom:1px solid rgba(255,181,71,.45)}
 .hint kbd{font:700 12px/1 var(--ui);padding:3px 7px;border-radius:4px;border:1px solid rgba(241,236,224,.35);border-bottom-width:2px;color:var(--chalk)}
 .oh{margin:0;font:800 30px/1 var(--display);color:var(--chalk-dim)}
 .oscore{margin:6px 0 2px;font:900 clamp(96px,14vw,168px)/.85 var(--display);color:var(--chalk);font-variant-numeric:tabular-nums}
@@ -352,6 +353,7 @@ html,button,.ch{touch-action:manipulation}
       </div>
       <span class="plate-wrap"><button class="plate" id="play">Play ball</button></span>
       <p class="hint" id="menuBest">Press <kbd>Space</kbd> to start</p>
+      <p class="hint" id="fieldAd"></p>
     </div>
   </section>
 
@@ -459,6 +461,16 @@ const P_IGRASS = (() => { const p = new Path2D(); p.moveTo(0, 5.7); p.lineTo(58,
 const P_FENCE = fenceLine(0), P_WALL = fenceLine(2.2), P_WALLTOP = fenceLine(4.4);
 const BASES = [[63.6, 63.6], [0, 127.3], [-63.6, 63.6]];
 const LIGHTS = [[-360, 400], [360, 400], [-215, -70], [215, -70]];
+
+/* Sponsored fields: each page load picks one and paints its logo and URL on the outfield grass.
+   Add a project: drop a logo in assets/ and add a row here. w/h are the painted size in feet. */
+const FIELDS = [
+  { name: 'Run The Play', url: 'runtheplayapp.com', href: 'https://www.runtheplayapp.com', logo: 'assets/field-runtheplay.png', w: 132, h: 87, wall: '#14284b' },
+  { name: 'Youth Baseball Time', url: 'youthbaseballtime.com', href: 'https://youthbaseballtime.com', logo: 'assets/field-youthbaseballtime.png', w: 100, h: 96, wall: '#123a6b' }
+];
+// ?field=2 pins a field for previewing; otherwise it's random per load
+const FIELD = FIELDS[+new URLSearchParams(location.search).get('field') - 1] || FIELDS[(Math.random() * FIELDS.length) | 0];
+FIELD.img = new Image(); FIELD.img.src = FIELD.logo;
 
 /* Pitch + swing constants */
 const REL_Y = 56.5, CATCH_Y = -3.6, PATH = REL_Y - CATCH_Y, CONTACT_Y = 0.6;
@@ -1022,6 +1034,14 @@ function drawField(s) {
   // warning track
   c.strokeStyle = '#8e5532'; c.lineWidth = 28; c.stroke(P_FENCE);
   c.restore();
+  // sponsor paint in center field
+  if (s < 5) {
+    const im = FIELD.img;
+    c.globalAlpha = 0.9;
+    if (im.complete && im.naturalWidth) { c.save(); c.translate(0, 248); c.scale(1, -1); c.drawImage(im, -FIELD.w / 2, -FIELD.h / 2, FIELD.w, FIELD.h); c.restore(); }
+    wText(FIELD.url.toUpperCase(), 0, 186, 0, 19, 'rgba(244,240,230,0.9)');
+    c.globalAlpha = 1;
+  }
   // infield dirt
   c.save(); c.clip(P_WIDE); c.fillStyle = '#b5633a'; c.beginPath(); c.arc(0, 60.5, 95, 0, TAU); c.fill(); c.restore();
   // infield grass
@@ -1052,7 +1072,7 @@ function drawField(s) {
   c.restore();
   // wall
   c.lineJoin = 'round';
-  c.strokeStyle = '#123b2d'; c.lineWidth = 4.4; c.stroke(P_WALL);
+  c.strokeStyle = FIELD.wall; c.lineWidth = 4.4; c.stroke(P_WALL);
   c.strokeStyle = '#e8c547'; c.lineWidth = lw(0.6, 1.2); c.stroke(P_WALLTOP);
   // foul poles
   c.fillStyle = '#ffd84a';
@@ -1917,6 +1937,10 @@ setMuteIcon();
 buildHearts(); buildMeter(); updStreak(false);
 const startHint = TOUCH ? 'Tap the field to swing.' : 'Press <kbd>Space</kbd> to start.';
 $('#menuBest').innerHTML = local.bestScore > 0 ? `Your best: <strong>${local.bestScore.toLocaleString()}</strong>. ${startHint}` : startHint;
+{
+  const a = document.createElement('a'); a.href = FIELD.href; a.target = '_blank'; a.rel = 'noopener'; a.textContent = FIELD.url;
+  $('#fieldAd').append(`Tonight's field: ${FIELD.name}. `, a);
+}
 resize();
 const panelPref = store.get('ss.panel', null);
 togglePanel(panelPref != null ? panelPref && app.classList.contains('wide') : app.classList.contains('wide') && W >= 1180);
