@@ -466,7 +466,9 @@ const LIGHTS = [[-360, 400], [360, 400], [-215, -70], [215, -70]];
    Add a project: drop a logo in assets/ and add a row here. w/h are the painted size in feet. */
 const FIELDS = [
   { name: 'Run The Play', url: 'runtheplayapp.com', href: 'https://www.runtheplayapp.com', logo: 'assets/field-runtheplay.png', w: 132, h: 87, wall: '#14284b' },
-  { name: 'Youth Baseball Time', url: 'youthbaseballtime.com', href: 'https://youthbaseballtime.com', logo: 'assets/field-youthbaseballtime.png', w: 100, h: 96, wall: '#123a6b' }
+  { name: 'Youth Baseball Time', url: 'youthbaseballtime.com', href: 'https://youthbaseballtime.com', logo: 'assets/field-youthbaseballtime.png', w: 100, h: 96, wall: '#123a6b' },
+  { name: 'SlushFun', url: 'slushfun.biz', href: 'https://slushfun.biz', logo: 'assets/field-slushfun.png', w: 176, h: 34, wall: '#12305c' },
+  { name: 'Sawman', url: 'sawman.app', href: 'https://sawman.app', logo: 'assets/field-sawman.png', w: 88, h: 88, wall: '#0a1830' }
 ];
 // ?field=2 pins a field for previewing; otherwise it's random per load
 const FIELD = FIELDS[+new URLSearchParams(location.search).get('field') - 1] || FIELDS[(Math.random() * FIELDS.length) | 0];
@@ -1038,7 +1040,7 @@ function drawField(s) {
   if (s < 5) {
     const im = FIELD.img;
     c.globalAlpha = 0.9;
-    if (im.complete && im.naturalWidth) { c.save(); c.translate(0, 248); c.scale(1, -1); c.drawImage(im, -FIELD.w / 2, -FIELD.h / 2, FIELD.w, FIELD.h); c.restore(); }
+    if (im.complete && im.naturalWidth) { c.save(); c.translate(0, 205 + FIELD.h / 2); c.scale(1, -1); c.drawImage(im, -FIELD.w / 2, -FIELD.h / 2, FIELD.w, FIELD.h); c.restore(); }
     wText(FIELD.url.toUpperCase(), 0, 186, 0, 19, 'rgba(244,240,230,0.9)');
     c.globalAlpha = 1;
   }
