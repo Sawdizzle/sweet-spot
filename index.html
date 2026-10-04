@@ -206,9 +206,10 @@ button:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .sws button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid transparent;background:var(--j);box-shadow:inset 0 0 0 6px var(--h);cursor:pointer;outline-offset:3px}
 .sws button[aria-pressed="true"]{border-color:var(--chalk);transform:scale(1.12)}
 .optnote{margin:-2px 0 0 74px;font:500 13px/1.4 var(--ui);color:var(--chalk-dim)}
-.tabs button{font-size:12px;white-space:nowrap;padding:8px 2px}
+.tabs button{font-size:11.5px;white-space:nowrap;padding:8px 1px}
 #ini{margin:0 0 6px}
 #ini[hidden],#oActions[hidden]{display:none}
+[hidden]{display:none!important}
 .ini-h{margin:0 0 10px;font:800 24px/1 var(--display);color:#ffa630;text-shadow:0 0 12px rgba(255,150,40,.5);animation:blinkCh 1.1s steps(2) infinite}
 .dmd{position:relative;display:inline-flex;gap:6px;padding:10px 16px;background:#160c03;border:3px solid #2c1b08;border-radius:9px;box-shadow:inset 0 0 34px rgba(0,0,0,.85),0 0 0 2px #000,0 14px 30px rgba(0,0,0,.5)}
 .dmd::after{content:"";position:absolute;inset:0;border-radius:6px;pointer-events:none;z-index:1;background:radial-gradient(circle,transparent 1.1px,rgba(22,12,3,.92) 1.7px) 0 0/5px 5px}
@@ -261,6 +262,10 @@ html,button,.ch{touch-action:manipulation}
   .lede{font-size:16px}
   .ctl button .t{display:none}
   #meter{bottom:76px}
+  .seg button{padding:9px 10px}
+  .seg .lg{display:none}
+  .opt{grid-template-columns:52px 1fr;gap:10px}
+  .optnote{margin-left:62px}
 }
 @media (prefers-reduced-motion: reduce){
   *{animation-duration:.01ms!important;transition-duration:.01ms!important}
@@ -276,9 +281,9 @@ html,button,.ch{touch-action:manipulation}
   <header id="hud" aria-label="Scoreboard">
     <div class="sb">
       <div class="cell"><span class="lab">Score</span><span class="num" id="sScore">0</span></div>
-      <div class="cell"><span class="lab">Hit streak</span><span class="num" id="sStreak">0</span><span class="mult" id="sMult">×1</span></div>
-      <div class="cell c-count"><span class="lab">Count</span><div class="count" aria-label="Count"><span>B</span><span class="lamps b" id="lb"><i></i><i></i><i></i></span><span>S</span><span class="lamps s" id="ls"><i></i><i></i></span></div></div>
-      <div class="cell c-outs"><span class="lab">Outs left</span><div class="hearts" id="hearts"></div></div>
+      <div class="cell"><span class="lab" id="sStreakLab">Hit streak</span><span class="num" id="sStreak">0</span><span class="mult" id="sMult">×1</span></div>
+      <div class="cell c-count"><span class="lab" id="sCountLab">Count</span><span class="num amber" id="sHRs" hidden>0</span><div class="count" id="sCount" aria-label="Count"><span>B</span><span class="lamps b" id="lb"><i></i><i></i><i></i></span><span>S</span><span class="lamps s" id="ls"><i></i><i></i></span></div></div>
+      <div class="cell c-outs"><span class="lab" id="sOutsLab">Outs left</span><span class="num" id="sLeft" hidden>20</span><div class="hearts" id="hearts"></div></div>
       <div class="cell"><span class="lab" id="sType">Radar gun</span><span class="num amber" id="sMph">––</span><span class="unit">mph</span></div>
     </div>
     <div id="pace" hidden>
@@ -316,7 +321,8 @@ html,button,.ch{touch-action:manipulation}
       <button role="tab" data-tab="today" aria-selected="false">Today</button>
       <button role="tab" data-tab="score" aria-selected="true">All-time</button>
       <button role="tab" data-tab="streak" aria-selected="false">Streak</button>
-      <button role="tab" data-tab="hr" aria-selected="false">Longest HR</button>
+      <button role="tab" data-tab="hr" aria-selected="false">Long HR</button>
+      <button role="tab" data-tab="derby" aria-selected="false">Derby</button>
     </div>
     <ol id="board"></ol>
     <p class="note" id="boardNote">Loading the board…</p>
@@ -339,7 +345,7 @@ html,button,.ch{touch-action:manipulation}
         <div><dt>Outs</dt><dd>Three strikes and you're out. Three outs ends the run.</dd></div>
       </dl>
       <div class="opts">
-        <div class="opt"><span class="ol">Mode</span><div class="seg" id="optMode"><button data-v="free">Free play</button><button data-v="daily">Daily challenge</button></div></div>
+        <div class="opt"><span class="ol">Mode</span><div class="seg" id="optMode"><button data-v="free">Free play</button><button data-v="daily">Daily<span class="lg"> challenge</span></button><button data-v="derby">HR derby</button></div></div>
         <p class="optnote" id="modeNote"></p>
         <div class="opt"><span class="ol">Bats</span><div class="seg" id="optHand"><button data-v="R">Right</button><button data-v="L">Left</button></div></div>
         <div class="opt"><span class="ol">Colors</span><div class="sws" id="optTeam"></div></div>
@@ -413,6 +419,7 @@ const OPTS = Object.assign({ mode: 'free', hand: 'R', team: 'steel' }, store.get
 const HAND = () => OPTS.hand === 'L' ? -1 : 1;
 const TEAM = () => TEAMS.find(t => t.id === OPTS.team) || TEAMS[0];
 let RUN_MODE = 'free';
+const DERBY_PITCHES = 20;
 
 /* =========================================================
    Field geometry (world units = feet, home plate at origin,
@@ -483,9 +490,14 @@ function resize() {
   cvs.width = Math.round(W * DPR); cvs.height = Math.round(H * DPR);
   mini.width = Math.round(170 * DPR); mini.height = Math.round(128 * DPR);
   app.classList.toggle('wide', W >= 980);
-  const hb = $('#hud').getBoundingClientRect(); TOP = Math.max(70, hb.bottom - r.top + 8);
-  BOT = W < 640 ? 120 : 34;
+  measureTop();
+  BOT = W < 640 ? 110 : 34;
 }
+function measureTop() {
+  const r = cvs.getBoundingClientRect(), hb = $('#hud').getBoundingClientRect();
+  TOP = Math.max(70, hb.bottom - r.top + 8);
+}
+function setPaceHidden(h) { const el = $('#pace'); if (el.hidden !== h) { el.hidden = h; measureTop(); } }
 const panelW = () => (app.classList.contains('wide') && app.classList.contains('panel-open')) ? 340 : 0;
 
 /* Pre-rendered stands + crowd */
@@ -519,7 +531,7 @@ function buildCrowd() {
    ========================================================= */
 const G = {
   state: 'between', demo: true, nextAt: 0,
-  balls: 0, strikes: 0, score: 0, disp: 0, streak: 0, runBestStreak: 0, hearts: 3, pitches: 0, hits: 0, hrs: 0, longestHR: 0,
+  balls: 0, strikes: 0, score: 0, disp: 0, streak: 0, runBestStreak: 0, hearts: 3, left: DERBY_PITCHES, pitches: 0, hits: 0, hrs: 0, longestHR: 0,
   pace: [], spray: [], pitch: null, wind: null, swing: null, pending: null, pendingMiss: null,
   hit: null, ghost: null, lastPitch: null,
   shake: 0, flash: 0, hurt: 0, crowdFlashUntil: 0,
@@ -528,6 +540,10 @@ const G = {
   fielders: FIELD_POS.map(([x, y]) => ({ hx: x, hy: y, x, y, tx: null, ty: null, speed: 0 }))
 };
 const cam = { x: 0, y: 28, s: 8 };
+// Small screens: S0 is the resting zoom (px per foot). When it gets low, HS enlarges
+// everything around home plate and widens the pitch lanes so they stay readable.
+let S0 = 8, HS = 1;
+const DERBY = () => RUN_MODE === 'derby' && !G.demo;
 const parts = [];
 const ghostHits = [];
 let simT = 0;
@@ -550,6 +566,7 @@ function makePitch(release) {
   // Pitchers work the count: groove it at 3 balls, waste one when ahead 0-2 or 1-2
   let sp = G.pitches < 3 ? 0.78 : 0.62;
   if (!G.demo) { if (G.balls === 3) sp = 0.82; else if (G.strikes === 2 && G.balls < 2) sp = 0.5; }
+  if (DERBY()) sp = 1; // derby pitchers groove every one
   const strike = r[2] < sp;
   let xt, dirt = false;
   if (strike) xt = lerp(-0.72, 0.72, r[3]);
@@ -630,16 +647,19 @@ function makeHit(err) {
 }
 function resolveContact(o, now) {
   const p = G.pitch, cp = pitchPos(p, PC);
-  const ox = cp.x, oy = CONTACT_Y;
+  const ox = cp.x * HS, oy = CONTACT_Y;
   if (!G.demo) updRadar(p);
   if (o.kind === 'hit') {
     const m = makeHit(o.err);
+    const stays = DERBY() && m.kind !== 'hr'; // derby: anything short of the wall costs a pitch
     if (!G.demo) {
-      G.streak++; G.hits++; G.runBestStreak = Math.max(G.runBestStreak, G.streak);
-      updStreak(true); resetCount();
+      G.hits++;
+      if (stays) { G.streak = 0; updStreak(false); useLeft(); }
+      else { G.streak++; G.runBestStreak = Math.max(G.runBestStreak, G.streak); updStreak(true); }
+      resetCount();
     }
     const mult = multFor(G.streak);
-    const pts = Math.round((KIND_PTS[m.kind] + (m.q === 'perfect' ? 100 : 0)) * mult);
+    const pts = stays ? 0 : Math.round((KIND_PTS[m.kind] + (m.q === 'perfect' ? 100 : 0)) * mult);
     const T = 1.05 + m.d / 245;
     G.hit = {
       ...m, a: m.deg * D2R, ox, oy, start: simT, T, pts, trail: [],
@@ -669,7 +689,8 @@ function resolveContact(o, now) {
     G.hit.lx = ox + Math.sin(G.hit.a) * d; G.hit.ly = oy + Math.cos(G.hit.a) * d;
     if (!G.demo) {
       sfx.crack(0.3);
-      if (G.strikes < 2) { G.strikes++; updCount(); showCallout('Foul ball', `Strike ${G.strikes === 1 ? 'one' : 'two'}`, 'mini'); }
+      if (DERBY()) { G.streak = 0; updStreak(false); useLeft(); showCallout('Foul ball', leftText(), 'mini'); }
+      else if (G.strikes < 2) { G.strikes++; updCount(); showCallout('Foul ball', `Strike ${G.strikes === 1 ? 'one' : 'two'}`, 'mini'); }
       else showCallout('Foul ball', 'Still alive with two strikes', 'mini');
     }
     contactBurst(ox, oy, 0.25);
@@ -683,7 +704,13 @@ function resolveMitt(now) {
   G.lastMitt = { x: fin.x, y: CATCH_Y + 0.4 };
   G.mittPopAt = now;
   if (!G.demo) sfx.pop();
-  if (!G.demo) {
+  if (DERBY()) {
+    G.streak = 0; updStreak(false); useLeft();
+    if (!G.pendingMiss) G.umpPunchUntil = now + 700;
+    showCallout(G.pendingMiss ? 'Swing and a miss' : 'Strike', leftText(), 'mini out');
+    updRadar(p);
+    finalizePitch();
+  } else if (!G.demo) {
     if (G.pendingMiss === 'chase') addStrike('Chased one outside the lanes', false);
     else if (G.pendingMiss === 'whiff') addStrike(p.err < 0 ? 'Swinging, way out in front' : 'Swinging, too late on it', false);
     else if (p.strike) { G.umpPunchUntil = now + 700; addStrike('Called, it caught the plate', true); }
@@ -692,8 +719,11 @@ function resolveMitt(now) {
     finalizePitch();
   }
   G.state = 'after';
-  G.nextAt = now + (G.hearts <= 0 && !G.demo ? 1400 : 950);
+  G.nextAt = now + (runDone() ? 1400 : 950);
 }
+function runDone() { return !G.demo && (RUN_MODE === 'derby' ? G.left <= 0 : G.hearts <= 0); }
+function useLeft() { G.left = Math.max(0, G.left - 1); setText('#sLeft', G.left); pulse($('#sLeft')); }
+function leftText() { return G.left <= 0 ? 'That was the last pitch' : `${G.left} pitch${G.left === 1 ? '' : 'es'} left`; }
 function addStrike(reason, looking) {
   G.strikes++;
   if (G.strikes >= 3) {
@@ -775,14 +805,15 @@ function onLand(h, now) {
   if (h.kind !== 'hr') {
     G.score += h.pts;
     G.spray.push({ x: h.pos.x, y: h.pos.y, hr: false });
-    showCallout(KIND_NAME[h.kind], `${Math.round(h.d)} ft`, h.kind === 'triple' ? 'hr' : '', `+${h.pts}`);
+    if (DERBY()) showCallout(KIND_NAME[h.kind], `Stayed in the park. ${leftText()}`, 'mini');
+    else showCallout(KIND_NAME[h.kind], `${Math.round(h.d)} ft`, h.kind === 'triple' ? 'hr' : '', `+${h.pts}`);
     sfx.crowd(false);
   }
 }
 function celebrateHR(now, h) {
   const dist = Math.round(h.d);
   if (!G.demo) {
-    G.score += h.pts; G.hrs++;
+    G.score += h.pts; G.hrs++; setText('#sHRs', G.hrs);
     G.longestHR = Math.max(G.longestHR, dist);
     G.spray.push({ x: h.lx, y: h.ly, hr: true });
     showCallout('Home run', `${dist} ft`, 'hr long', `+${h.pts}`);
@@ -862,7 +893,7 @@ function update(now, dtR, dt) {
     case 'after':
       if (G.hit && !G.hit.settled) updateHit(now);
       if (now >= G.nextAt) {
-        if (!G.demo && G.hearts <= 0) gameOver();
+        if (runDone()) gameOver();
         else scheduleNext(G.hit && !G.hit.foul ? 1050 : 320);
       }
       break;
@@ -893,7 +924,8 @@ function update(now, dtR, dt) {
 }
 function camTarget() {
   const fw = W - panelW(), avH = Math.max(200, H - TOP - BOT);
-  const s0 = Math.min(avH / 80, fw / 30);
+  const s0 = Math.max(0.5, Math.min(avH / 80, fw / 30));
+  S0 = s0; HS = clamp(1 + (9 - s0) * 0.3, 1, 2.2);
   const h = G.hit;
   if (h && h.pos && (G.state === 'inplay' || G.state === 'after')) {
     const pts = [[0, -8], [h.pos.x, h.pos.y]];
@@ -944,7 +976,7 @@ function render(now) {
   if (G.state === 'windup' || G.state === 'pitch') drawLanes(s);
   for (const f of G.fielders) {
     const tgt = G.hit && G.hit.pos && !G.hit.foul ? G.hit.pos : { x: 0, y: 0 };
-    person(f.x, f.y, Math.atan2(tgt.y - f.y, tgt.x - f.x), '#ebe5d6', '#9a2e26', { glove: 1, sc: Math.max(1, 2.8 / s) });
+    person(f.x, f.y, Math.atan2(tgt.y - f.y, tgt.x - f.x), '#ebe5d6', '#9a2e26', { glove: 1, sc: Math.max(1, (S0 < 8 ? 4.2 : 2.8) / s) });
   }
   drawPitcher(now);
   drawUmpire(now);
@@ -1006,14 +1038,18 @@ function drawField(s) {
   c.lineWidth = lw(0.33, 1.4);
   c.beginPath(); c.moveTo(0.71, 0); c.lineTo(POLE * S2, POLE * S2); c.moveTo(-0.71, 0); c.lineTo(-POLE * S2, POLE * S2); c.stroke();
   c.lineWidth = lw(0.25, 1.2);
-  c.strokeRect(-5.21, -3.71, 4, 6); c.strokeRect(1.21, -3.71, 4, 6);
-  c.beginPath(); c.moveTo(-1.6, -3.71); c.lineTo(-1.6, -8.5); c.lineTo(1.6, -8.5); c.lineTo(1.6, -3.71); c.stroke();
   c.beginPath(); c.arc(-38, -28, 2.6, 0, TAU); c.stroke(); c.beginPath(); c.arc(38, -28, 2.6, 0, TAU); c.stroke();
+  c.save(); c.scale(HS, HS); c.lineWidth /= HS;
+  c.strokeRect(-5.21, -3.71, 4, 6); c.strokeRect(1.21, -3.71, 4, 6);
+  c.beginPath(); c.moveTo(-1.6, -3.71); c.lineTo(-1.6, -8.5 + 3.4 * (HS - 1) / HS); c.lineTo(1.6, -8.5 + 3.4 * (HS - 1) / HS); c.lineTo(1.6, -3.71); c.stroke();
+  c.restore();
   // bases
   c.fillStyle = '#f6f2e8';
   for (const [bx, by] of BASES) { c.save(); c.translate(bx, by); c.rotate(Math.PI / 4); c.fillRect(-0.75, -0.75, 1.5, 1.5); c.restore(); }
   c.fillRect(-1, 60.25, 2, 0.5);
+  c.save(); c.scale(HS, HS);
   c.beginPath(); c.moveTo(-0.71, 0); c.lineTo(0.71, 0); c.lineTo(0.71, -0.71); c.lineTo(0, -1.42); c.lineTo(-0.71, -0.71); c.closePath(); c.fill();
+  c.restore();
   // wall
   c.lineJoin = 'round';
   c.strokeStyle = '#123b2d'; c.lineWidth = 4.4; c.stroke(P_WALL);
@@ -1031,7 +1067,7 @@ function drawField(s) {
   }
 }
 function drawLanes(s) {
-  const c = ctx, x = 0.83;
+  const c = ctx, x = 0.83 * HS;
   c.fillStyle = 'rgba(255,255,255,0.045)'; c.fillRect(-x, 0.2, x * 2, 22);
   c.strokeStyle = 'rgba(255,255,255,0.34)'; c.lineWidth = lw(0.08, 1.2);
   c.setLineDash([1.1, 0.9]);
@@ -1081,7 +1117,9 @@ function drawBat(a, alpha) {
   c.globalAlpha = 1;
 }
 function drawBatter(now) {
-  ctx.save(); if (HAND() < 0) ctx.scale(-1, 1);
+  ctx.save();
+  if (HS !== 1) { ctx.translate(0, CONTACT_Y); ctx.scale(HS, HS); ctx.translate(0, -CONTACT_Y); }
+  if (HAND() < 0) ctx.scale(-1, 1);
   drawBatterInner(now);
   ctx.restore();
 }
@@ -1116,7 +1154,10 @@ function drawPitcher(now) {
   if (G.state === 'windup' && G.wind) w = clamp((now - G.wind.start) / G.wind.dur, 0, 1);
   else if (G.pitch && G.state !== 'between' && now >= G.pitch.release) { w = 1; follow = clamp((now - G.pitch.release) / 280, 0, 1); }
   const stride = ease(clamp((w - 0.55) / 0.45, 0, 1));
-  const by = 61.2 - 2.4 * stride - 0.7 * follow;
+  // Enlarged on small screens; shifted so the release hand still meets the ball's start point
+  const sc = Math.max(1, 2.4 / cam.s, S0 < 9 ? Math.min(3.2, 18 / S0) : 1);
+  const px = (sc - 1) - 1.1 * (HS - 1);
+  const by = 61.2 + 2.1 * (sc - 1) - 2.4 * stride - 0.7 * follow;
   let hand;
   if (w < 0.35) hand = [0.15, 0.55];
   else if (w < 0.75) { const t = ease((w - 0.35) / 0.4); hand = [lerp(0.15, 1.35, t), lerp(0.55, -1.3, t)]; }
@@ -1124,9 +1165,9 @@ function drawPitcher(now) {
   if (follow > 0) { const t = ease(follow); hand = [lerp(1.0, -0.7, t), lerp(2.1, 1.3, t)]; }
   const glove = w < 0.35 ? [-0.1, 0.6] : [lerp(-0.1, -1.05, clamp((w - 0.35) / 0.3, 0, 1)), lerp(0.6, 1.25, stride)];
   const knee = w > 0.22 && w < 0.62 ? [-0.25, 0.4 + 0.7 * Math.sin((w - 0.22) / 0.4 * Math.PI)] : null;
-  person(0, by, -Math.PI / 2, '#ebe5d6', '#9a2e26', { hands: [hand, glove], glove: 1, knee, sc: Math.max(1, 2.4 / cam.s) });
+  person(px, by, -Math.PI / 2, '#ebe5d6', '#9a2e26', { hands: [hand, glove], glove: 1, knee, sc });
   if (G.state === 'windup' || G.state === 'between') {
-    ctx.fillStyle = '#fff'; ellipse(-hand[0], by - hand[1], 0.17, 0.17);
+    ctx.fillStyle = '#fff'; ellipse(px - hand[0] * sc, by - hand[1] * sc, 0.17 * sc, 0.17 * sc);
   }
 }
 function drawCatcher(now) {
@@ -1136,11 +1177,11 @@ function drawCatcher(now) {
     mx = lerp(0, pitchPos(G.pitch, 1).x, ease(clamp(prog * 1.3, 0, 1)));
   } else if (G.lastMitt) mx = G.lastMitt.x;
   const pop = now - G.mittPopAt < 160 ? Math.sin((now - G.mittPopAt) / 160 * Math.PI) * 0.25 : 0;
-  person(0, -4.1, Math.PI / 2, '#2a3038', '#20252b', { hands: [[0.9, 0.3], [clamp(mx, -1.9, 1.9) - 0.0, 0.85 - pop]], glove: 1 });
+  person(0, -4.1 - (HS - 1), Math.PI / 2, '#2a3038', '#20252b', { hands: [[0.9, 0.3], [clamp(mx, -1.9, 1.9) - 0.0, 0.85 - pop]], glove: 1, sc: HS });
 }
 function drawUmpire(now) {
   const punch = now < G.umpPunchUntil;
-  person(0.7, -6.6, Math.PI / 2, '#1c2432', '#131924', { hands: punch ? [[2.0, 0.4], [-0.9, 0.4]] : [[0.9, 0.35], [-0.9, 0.35]] });
+  person(0.7 * HS, -6.6 - 2.5 * (HS - 1), Math.PI / 2, '#1c2432', '#131924', { hands: punch ? [[2.0, 0.4], [-0.9, 0.4]] : [[0.9, 0.35], [-0.9, 0.35]], sc: HS });
 }
 function drawBall(x, y, z, R, alpha) {
   const c = ctx;
@@ -1158,7 +1199,7 @@ function drawBall(x, y, z, R, alpha) {
   c.globalAlpha = 1;
 }
 function drawBalls(now, s) {
-  const baseR = Math.max(0.42, 3.6 / s);
+  const baseR = Math.max(0.42 * HS, (S0 < 8 ? 5 : 3.6) / s);
   if (G.state === 'pitch' && G.pitch) {
     const p = G.pitch;
     let prog = (now - p.release) / p.totalMs;
@@ -1167,17 +1208,17 @@ function drawBalls(now, s) {
     for (let i = 6; i >= 1; i--) {
       const q = prog - i * 0.011; if (q < 0) continue;
       const b = pitchPos(p, q);
-      ctx.globalAlpha = 0.07 * (7 - i); ctx.fillStyle = '#fff'; ellipse(b.x, b.y, baseR * (1 - i * 0.08), baseR * (1 - i * 0.08)); ctx.globalAlpha = 1;
+      ctx.globalAlpha = 0.07 * (7 - i); ctx.fillStyle = '#fff'; ellipse(b.x * HS, b.y, baseR * (1 - i * 0.08), baseR * (1 - i * 0.08)); ctx.globalAlpha = 1;
     }
     const b = pitchPos(p, prog);
-    if (p.dirt && Math.abs(prog / PC - p.bq) < 0.02 && !p.dusted) { p.dusted = true; dust(b.x, b.y, 1); }
-    drawBall(b.x, b.y, b.z, baseR * (1 + b.z * 0.03), 1);
+    if (p.dirt && Math.abs(prog / PC - p.bq) < 0.02 && !p.dusted) { p.dusted = true; dust(b.x * HS, b.y, 1); }
+    drawBall(b.x * HS, b.y, b.z, baseR * (1 + b.z * 0.03), 1);
   } else if ((G.state === 'after' || G.state === 'between') && G.lastMitt && !G.hit) {
-    drawBall(G.lastMitt.x, G.lastMitt.y + 0.5, 1.5, 0.35, 0.9);
+    drawBall(G.lastMitt.x * HS, G.lastMitt.y + 0.5, 1.5, 0.35 * HS, 0.9);
   }
   const h = G.hit;
   if (h && h.pos && (G.state === 'inplay' || G.state === 'after')) {
-    const R = Math.max(0.42, 4.2 / s) * (1 + h.pos.z / 70);
+    const R = Math.max(0.42, (S0 < 8 ? 5.2 : 4.2) / s) * (1 + h.pos.z / 70);
     if (h.trail.length > 1) {
       ctx.lineCap = 'round';
       for (let i = 1; i < h.trail.length; i++) {
@@ -1302,6 +1343,11 @@ function showMeter(err, label) {
 }
 function resetHud() {
   G.disp = 0; setText('#sScore', '0'); updStreak(false); buildHearts(); updHearts(false); updCount();
+  const derby = RUN_MODE === 'derby';
+  $('#hearts').hidden = derby; $('#sLeft').hidden = !derby; $('#sCount').hidden = derby; $('#sHRs').hidden = !derby;
+  setText('#sOutsLab', derby ? 'Pitches left' : 'Outs left'); setText('#sCountLab', derby ? 'Home runs' : 'Count');
+  setText('#sStreakLab', derby ? 'HR streak' : 'Hit streak');
+  setText('#sLeft', G.left); setText('#sHRs', G.hrs);
   setText('#sMph', '––'); setText('#sType', 'Radar gun');
 }
 
@@ -1311,6 +1357,7 @@ function resetHud() {
 async function pickGhost() {
   let best = null;
   const daily = RUN_MODE === 'daily', today = todayKey();
+  if (RUN_MODE === 'derby') { G.ghost = null; setPaceHidden(true); return; }
   for (const [id, d] of players) {
     const sc = daily ? (d.dailyDate === today ? +d.dailyBest || 0 : 0) : +d.bestScore || 0;
     const arr = daily ? d.dailyGhost : d.ghost;
@@ -1321,7 +1368,7 @@ async function pickGhost() {
     else if (!daily && local.pace && local.pace.length) best = { id: myId, score: local.bestScore, arr: local.pace };
   }
   G.ghost = best;
-  if (!best) { $('#pace').hidden = true; return; }
+  if (!best) { setPaceHidden(true); return; }
   let label = RUN_MODE === 'daily' ? 'your run today' : 'your best run';
   if (best.id && best.id !== myId && USER) { const ps = await USER.profiles([best.id]); label = `${(ps[best.id] && ps[best.id].name) || 'Top run'}’s best`; }
   else if (best.id && best.id !== myId) label = `${cleanIni((players.get(best.id) || {}).initials) || 'Top run'}’s best`;
@@ -1330,8 +1377,8 @@ async function pickGhost() {
 }
 function updPace() {
   const g = G.ghost, el = $('#pace');
-  if (!g || G.demo) { el.hidden = true; return; }
-  el.hidden = false;
+  if (!g || G.demo) { setPaceHidden(true); return; }
+  setPaceHidden(false);
   const i = G.pitches - 1;
   const gs = i < 0 ? 0 : g.arr[Math.min(i, g.arr.length - 1)];
   const done = i >= g.arr.length - 1 && i >= 0;
@@ -1354,7 +1401,7 @@ function startRun() {
   if (document.activeElement && document.activeElement.blur) document.activeElement.blur();
   RUN_MODE = OPTS.mode;
   prng = RUN_MODE === 'daily' ? mulberry32(hashStr('sweet-spot-' + todayKey())) : Math.random;
-  Object.assign(G, { balls: 0, strikes: 0, demo: false, score: 0, disp: 0, streak: 0, runBestStreak: 0, hearts: 3, pitches: 0, hits: 0, hrs: 0, longestHR: 0, pace: [], spray: [], hit: null, pitch: null, swing: null, pending: null, pendingMiss: null, lastMitt: null, hrPending: false });
+  Object.assign(G, { balls: 0, strikes: 0, demo: false, score: 0, disp: 0, streak: 0, runBestStreak: 0, hearts: 3, left: DERBY_PITCHES, pitches: 0, hits: 0, hrs: 0, longestHR: 0, pace: [], spray: [], hit: null, pitch: null, swing: null, pending: null, pendingMiss: null, lastMitt: null, hrPending: false });
   resetHud();
   $('#menu').classList.remove('show'); $('#over').classList.remove('show');
   if (!app.classList.contains('wide')) app.classList.remove('panel-open');
@@ -1366,17 +1413,19 @@ function gameOver() {
   G.state = 'over';
   const daily = RUN_MODE === 'daily', today = todayKey();
   const prevDaily = local.daily && local.daily.date === today ? local.daily.score : 0;
-  const prevBest = daily ? prevDaily : local.bestScore;
+  const derby = RUN_MODE === 'derby';
+  const prevBest = derby ? +local.derby || 0 : daily ? prevDaily : local.bestScore;
   const isPB = G.score > prevBest;
-  $('#oHead').textContent = daily ? `Daily challenge, ${today}` : 'That\'s three outs';
+  $('#oHead').textContent = derby ? `HR derby, ${DERBY_PITCHES} pitches` : daily ? `Daily challenge, ${today}` : 'That\'s three outs';
   $('#oScore').textContent = G.score.toLocaleString();
   $('#oStreak').textContent = G.runBestStreak;
   $('#oHR').textContent = G.longestHR ? G.longestHR + ' ft' : '—';
   $('#oHits').textContent = G.hits;
   $('#oHRs').textContent = G.hrs;
-  $('#oLine').textContent = isPB && prevBest > 0 ? (daily ? 'New best for today' : 'New personal best')
-    : isPB ? (daily ? 'Today\'s run is on the books' : 'First run on the books')
-    : prevBest > 0 ? `Your best${daily ? ' today' : ''} is ${prevBest.toLocaleString()}` : 'Swing at the strikes and let the wide ones go';
+  $('#oLine').textContent = isPB && prevBest > 0 ? (derby ? 'New derby best' : daily ? 'New best for today' : 'New personal best')
+    : isPB ? (derby ? 'First derby on the books' : daily ? 'Today\'s run is on the books' : 'First run on the books')
+    : prevBest > 0 ? `Your ${derby ? 'derby ' : ''}best${daily ? ' today' : ''} is ${prevBest.toLocaleString()}`
+    : derby ? 'Only homers score. Square one up and the pitch is free.' : 'Swing at the strikes and let the wide ones go';
   $('#oNote').textContent = '';
   // Does this run change anything on the board? Then it earns initials.
   const cp = (DB && myId && players.get(myId)) || null;
@@ -1384,22 +1433,29 @@ function gameOver() {
   const bestK = cp ? +cp.bestStreak || 0 : local.bestStreak;
   const bestH = cp ? +cp.longestHR || 0 : local.longestHR;
   const bestD = cp ? (cp.dailyDate === today ? +cp.dailyBest || 0 : 0) : prevDaily;
+  const bestY = cp ? +cp.derbyBest || 0 : +local.derby || 0;
   const recs = [];
-  if (daily && G.score > bestD) recs.push('today\'s best');
-  if (G.score > bestS) recs.push('high score');
-  if (G.runBestStreak > bestK) recs.push('hit streak');
+  if (derby) { if (G.score > bestY) recs.push('derby best'); }
+  else {
+    if (daily && G.score > bestD) recs.push('today\'s best');
+    if (G.score > bestS) recs.push('high score');
+    if (G.runBestStreak > bestK) recs.push('hit streak');
+  }
   if (G.longestHR > bestH) recs.push('longest homer');
   const qualifies = G.score > 0 && recs.length > 0;
-  const allPB = G.score > local.bestScore;
+  // Derby runs keep their own best; they never touch the three-outs records
+  const allPB = !derby && G.score > local.bestScore;
   local = {
-    bestScore: Math.max(local.bestScore, G.score), bestStreak: Math.max(local.bestStreak, G.runBestStreak),
+    bestScore: derby ? local.bestScore : Math.max(local.bestScore, G.score),
+    bestStreak: derby ? local.bestStreak : Math.max(local.bestStreak, G.runBestStreak),
     longestHR: Math.max(local.longestHR, G.longestHR), pace: allPB ? G.pace.slice(0, 400) : local.pace,
-    daily: daily ? (isPB ? { date: today, score: G.score, pace: G.pace.slice(0, 400) } : local.daily) : local.daily
+    daily: daily ? (isPB ? { date: today, score: G.score, pace: G.pace.slice(0, 400) } : local.daily) : local.daily,
+    derby: derby ? Math.max(prevBest, G.score) : +local.derby || 0
   };
   store.set('ss.best', local);
   $('#over').classList.add('show');
   G.demo = true; G.hit = null; prng = Math.random; resetCount();
-  $('#pace').hidden = true;
+  setPaceHidden(true);
   pushPresence();
   if (qualifies) {
     $('#iniHead').textContent = recs.includes('high score') || recs.includes('today\'s best') ? 'New high score' : `New ${recs[0]}`;
@@ -1616,7 +1672,8 @@ const TABS = {
   today: { key: 'dailyBest', fmt: v => v.toLocaleString(), filter: d => d.dailyDate === todayKey() },
   score: { key: 'bestScore', fmt: v => v.toLocaleString() },
   streak: { key: 'bestStreak', fmt: v => String(v) },
-  hr: { key: 'longestHR', fmt: v => v + ' ft' }
+  hr: { key: 'longestHR', fmt: v => v + ' ft' },
+  derby: { key: 'derbyBest', fmt: v => v.toLocaleString() }
 };
 /* Supabase backend (PickEm project, sweet_spot_ table) */
 const SUPA_URL = 'https://yeykyutsbeqjcgdxlucn.supabase.co';
@@ -1649,14 +1706,14 @@ function supaRoom(sb, pid) {
 async function fetchBoard() {
   if (!SB) return;
   const { data, error } = await SB.from('sweet_spot_players')
-    .select('id,initials,best_score,best_streak,longest_hr,ghost,daily_date,daily_best,daily_ghost')
+    .select('id,initials,best_score,best_streak,longest_hr,ghost,daily_date,daily_best,daily_ghost,derby_best')
     .order('best_score', { ascending: false }).limit(500);
   if (error) { if (!players.size) { DB = null; localBoard(); } return; }
   DB = DB || {};
   players.clear();
   for (const r of data) players.set(r.id, {
     initials: r.initials, bestScore: r.best_score, bestStreak: r.best_streak, longestHR: r.longest_hr,
-    ghost: r.ghost, dailyDate: r.daily_date, dailyBest: r.daily_best, dailyGhost: r.daily_ghost
+    ghost: r.ghost, dailyDate: r.daily_date, dailyBest: r.daily_best, dailyGhost: r.daily_ghost, derbyBest: r.derby_best
   });
   renderBoard();
 }
@@ -1707,7 +1764,7 @@ function pushPresence() {
 let renderTok = 0;
 function localBoard() {
   const tab = TABS[boardTab];
-  const v = boardTab === 'today' ? (local.daily && local.daily.date === todayKey() ? local.daily.score : 0) : +local[tab.key] || 0;
+  const v = boardTab === 'today' ? (local.daily && local.daily.date === todayKey() ? local.daily.score : 0) : boardTab === 'derby' ? +local.derby || 0 : +local[tab.key] || 0;
   const ol = $('#board'); ol.innerHTML = '';
   if (v > 0) {
     const li = document.createElement('li'); li.className = 'me';
@@ -1724,7 +1781,7 @@ async function renderBoard() {
   const tok = ++renderTok, tab = TABS[boardTab];
   const rows = [...players.entries()].filter(([, d]) => !tab.filter || tab.filter(d)).map(([id, d]) => ({ id, v: +d[tab.key] || 0 })).filter(r => r.v > 0).sort((a, b) => b.v - a.v);
   const ol = $('#board'), note = $('#boardNote');
-  if (!rows.length) { ol.innerHTML = ''; note.textContent = boardTab === 'today' ? 'No one has played today\'s challenge yet. Pick Daily challenge and set the pace.' : 'No scores yet. Finish a run to claim the top spot.'; return; }
+  if (!rows.length) { ol.innerHTML = ''; note.textContent = boardTab === 'today' ? 'No one has played today\'s challenge yet. Pick Daily challenge and set the pace.' : boardTab === 'derby' ? 'No derby scores yet. Pick HR derby and put one over the wall.' : 'No scores yet. Finish a run to claim the top spot.'; return; }
   const show = rows.slice(0, 10).map((r, i) => ({ ...r, rank: i + 1 }));
   const mi = rows.findIndex(r => r.id === myId);
   if (mi >= 10) show.push({ ...rows[mi], rank: mi + 1, gap: true });
@@ -1742,7 +1799,7 @@ async function renderBoard() {
     const vl = document.createElement('span'); vl.className = 'vl'; vl.textContent = tab.fmt(r.v);
     li.append(rk, ini, nm, vl); ol.appendChild(li);
   }
-  note.textContent = boardTab === 'today' ? 'Everyone faces the same pitches today. Resets at midnight UTC.' : boardTab === 'streak' ? 'Most hits in a row without making an out.' : boardTab === 'hr' ? 'Longest home run in a single swing.' : 'Best score in one run of three outs.';
+  note.textContent = boardTab === 'today' ? 'Everyone faces the same pitches today. Resets at midnight UTC.' : boardTab === 'streak' ? 'Most hits in a row without making an out.' : boardTab === 'hr' ? 'Longest home run in a single swing.' : boardTab === 'derby' ? `Best HR derby score. ${DERBY_PITCHES} pitches, and homers don\'t use one up.` : 'Best score in one run of three outs.';
 }
 let liveTok = 0;
 async function renderLive() {
@@ -1791,13 +1848,25 @@ async function submitRun(isPB, initials) {
   const today = todayKey();
   const { sec } = identity();
   const ini = cleanIni(initials) || cleanIni(prev.initials) || null;
-  const { error } = await SB.rpc('sweet_spot_submit', {
-    p_id: myId, p_secret: sec, p_initials: ini,
-    p_score: G.score, p_streak: G.runBestStreak, p_hr: G.longestHR, p_homers: G.hrs,
-    p_pace: G.pace.slice(0, 400), p_daily: RUN_MODE === 'daily'
-  });
+  const derby = RUN_MODE === 'derby';
+  const { error } = derby
+    ? await SB.rpc('sweet_spot_submit_derby', { p_id: myId, p_secret: sec, p_initials: ini, p_score: G.score, p_homers: G.hrs, p_hr: G.longestHR })
+    : await SB.rpc('sweet_spot_submit', {
+      p_id: myId, p_secret: sec, p_initials: ini,
+      p_score: G.score, p_streak: G.runBestStreak, p_hr: G.longestHR, p_homers: G.hrs,
+      p_pace: G.pace.slice(0, 400), p_daily: RUN_MODE === 'daily'
+    });
   if (error) {
     $('#oNote').textContent = 'Couldn’t reach the leaderboard just now. This run is saved on this device.';
+    return;
+  }
+  if (derby) {
+    if (G.score > (+prev.derbyBest || 0)) {
+      const rank = [...players.entries()].filter(([id, d]) => id !== myId && (+d.derbyBest || 0) > G.score).length + 1;
+      $('#oNote').textContent = rank === 1 ? 'That puts you at the top of the derby board.' : `That puts you at #${rank} on the derby board.`;
+    }
+    await fetchBoard();
+    if (ROOM) { try { ROOM.emit('board', {}).catch(() => {}); } catch (e) {} }
     return;
   }
   const beatCloud = G.score > (+prev.bestScore || 0);
@@ -1827,8 +1896,10 @@ function renderOpts() {
   document.querySelectorAll('#optTeam button').forEach(b => b.setAttribute('aria-pressed', String(b.dataset.v === OPTS.team)));
   $('#modeNote').textContent = OPTS.mode === 'daily'
     ? `Everyone gets the same ${todayKey()} pitch sequence. Your pace bar chases today's leader, pitch for pitch.`
+    : OPTS.mode === 'derby' ? `${DERBY_PITCHES} pitches, all strikes. Only home runs score, and a homer doesn't use up a pitch.`
     : 'Random pitches every run. Scores count toward the all-time board.';
 }
+const MODE_TAB = { daily: 'today', derby: 'derby' };
 function saveOpts() { store.set('ss.opts', OPTS); renderOpts(); }
 const tw = $('#optTeam');
 for (const t of TEAMS) {
@@ -1838,10 +1909,10 @@ for (const t of TEAMS) {
   b.addEventListener('click', () => { OPTS.team = t.id; saveOpts(); });
   tw.appendChild(b);
 }
-document.querySelectorAll('#optMode button').forEach(b => b.addEventListener('click', () => { OPTS.mode = b.dataset.v; saveOpts(); setBoardTab(OPTS.mode === 'daily' ? 'today' : 'score'); }));
+document.querySelectorAll('#optMode button').forEach(b => b.addEventListener('click', () => { OPTS.mode = b.dataset.v; saveOpts(); setBoardTab(MODE_TAB[OPTS.mode] || 'score'); }));
 document.querySelectorAll('#optHand button').forEach(b => b.addEventListener('click', () => { OPTS.hand = b.dataset.v; saveOpts(); }));
 renderOpts();
-if (OPTS.mode === 'daily') { boardTab = 'today'; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === 'today'))); }
+if (MODE_TAB[OPTS.mode]) { boardTab = MODE_TAB[OPTS.mode]; document.querySelectorAll('.tabs button').forEach(x => x.setAttribute('aria-selected', String(x.dataset.tab === boardTab))); }
 setMuteIcon();
 buildHearts(); buildMeter(); updStreak(false);
 const startHint = TOUCH ? 'Tap the field to swing.' : 'Press <kbd>Space</kbd> to start.';
