@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>OG card</title>
+<!-- Renders a 1200x630 link-preview card. tools/make-og.sh screenshots it
+     once per game: /tools/og.html?game=fieldgoal (or ?game=home). -->
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@800;900&family=Barlow:wght@500;600&display=swap" rel="stylesheet">
+<style>
+:root{--night:#0b1611;--chalk:#f1ece0;--dim:rgba(241,236,224,.7);--amber:#ffb547}
+html,body{margin:0;width:1200px;height:630px;overflow:hidden;background:var(--night);color:var(--chalk)}
+.card{position:relative;width:1200px;height:630px;display:grid;grid-template-columns:540px 1fr;background:radial-gradient(900px 500px at 75% 40%,rgba(255,181,71,.12),transparent 60%),var(--night)}
+.left{padding:70px 0 0 70px;display:flex;flex-direction:column}
+.brand{font:800 30px/1 "Big Shoulders Display",sans-serif;letter-spacing:.16em;text-transform:uppercase;color:var(--amber)}
+h1{margin:18px 0 0;font:900 150px/.84 "Big Shoulders Display",sans-serif;letter-spacing:-.01em}
+.seam{width:380px;height:30px;margin:18px 0 0}
+p{margin:22px 0 0;max-width:430px;font:500 25px/1.35 Barlow,sans-serif;color:var(--dim)}
+.url{position:absolute;left:70px;bottom:36px;font:600 24px/1 Barlow,sans-serif;color:var(--dim)}
+.art{align-self:center;margin-right:60px;border-radius:18px;overflow:hidden;box-shadow:0 30px 60px rgba(0,0,0,.5)}
+.art svg{display:block;width:600px;height:300px}
+.grid{display:grid;grid-template-columns:repeat(3,190px);gap:14px;align-self:center;margin-right:60px}
+.grid svg{display:block;width:190px;height:95px;border-radius:10px}
+</style>
+</head>
+<body>
+<div class="card" id="card"></div>
+<script type="module">
+import { ART } from '/landing/art.js';
+import { GAMES } from '/core/games.js';
+const id = new URLSearchParams(location.search).get('game') || 'home';
+const g = GAMES.find(x => x.id === id);
+const seam = '<svg class="seam" viewBox="0 0 360 30"><path d="M2 22 C 90 2, 270 2, 358 22" fill="none" stroke="rgba(241,236,224,.35)" stroke-width="2"/><path d="M2 22 C 90 2, 270 2, 358 22" fill="none" stroke="#d23a2e" stroke-width="7" stroke-dasharray="2 9" stroke-linecap="round" transform="translate(0,-1)"/></svg>';
+const svg = (k, cls = '') => `<svg viewBox="0 0 320 160" preserveAspectRatio="xMidYMid slice">${ART[k]}</svg>`;
+const card = document.getElementById('card');
+if (g) {
+  const title = g.name.split(' ').join('<br>');
+  card.innerHTML = `<div class="left"><div class="brand">Sweet Spot</div><h1>${title}</h1>${seam}<p>${g.blurb}</p></div><div class="art">${svg(g.id)}</div><div class="url">sweetspot.sawman.app${g.path}</div>`;
+} else {
+  card.innerHTML = `<div class="left"><h1>Sweet<br>Spot</h1>${seam}<p>Five timing games. Hit the small window at exactly the right moment.</p></div><div class="grid">${GAMES.map(x => svg(x.id)).join('')}</div><div class="url">sweetspot.sawman.app</div>`;
+}
+document.fonts.ready.then(() => document.body.dataset.ready = '1');
+</script>
+</body>
+</html>

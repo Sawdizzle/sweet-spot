@@ -967,7 +967,7 @@ function resetHud() {
   setText('#sOutsLab', derby ? 'Pitches left' : 'Outs left'); setText('#sCountLab', derby ? 'Home runs' : 'Count');
   setText('#sStreakLab', derby ? 'HR streak' : 'Hit streak');
   setText('#sLeft', G.left); setText('#sHRs', G.hrs);
-  setText('#sMph', '––'); setText('#sType', 'Radar gun');
+  setText('#sMph', '-'); setText('#sType', 'Radar gun');
 }
 
 /* =========================================================
@@ -1038,7 +1038,7 @@ function gameOver() {
   $('#oHead').textContent = derby ? `HR derby, ${DERBY_PITCHES} pitches` : daily ? `Daily challenge, ${today}` : 'That\'s three outs';
   $('#oScore').textContent = G.score.toLocaleString();
   $('#oStreak').textContent = G.runBestStreak;
-  $('#oHR').textContent = G.longestHR ? G.longestHR + ' ft' : '—';
+  $('#oHR').textContent = G.longestHR ? G.longestHR + ' ft' : '-';
   $('#oHits').textContent = G.hits;
   $('#oHRs').textContent = G.hrs;
   $('#oLine').textContent = isPB && prevBest > 0 ? (derby ? 'New derby best' : daily ? 'New best for today' : 'New personal best')
