@@ -1,0 +1,39 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "cleanUrls": true,
+  "trailingSlash": false,
+  "rewrites": [
+    {
+      "source": "/baseball",
+      "destination": "/games/baseball/index.html"
+    },
+    {
+      "source": "/fieldgoal",
+      "destination": "/games/fieldgoal/index.html"
+    },
+    {
+      "source": "/pk",
+      "destination": "/games/pk/index.html"
+    },
+    {
+      "source": "/golf",
+      "destination": "/games/golf/index.html"
+    },
+    {
+      "source": "/drag",
+      "destination": "/games/drag/index.html"
+    }
+  ],
+  "redirects": [
+    {
+      "source": "/field-goal",
+      "destination": "/fieldgoal",
+      "permanent": true
+    },
+    {
+      "source": "/penalty",
+      "destination": "/pk",
+      "permanent": true
+    }
+  ]
+}

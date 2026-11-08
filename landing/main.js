@@ -1,0 +1,50 @@
+import { GAMES } from '../core/games.js';
+import { getTop } from '../core/leaderboard/scores.js';
+import { cleanIni } from '../core/initials/initials.js';
+
+/* Tile art: small flat scenes in the shared palette. viewBox 320x160. */
+const ART = {
+  baseball: `<rect width="320" height="160" fill="#1d4a33"/><path d="M160 150 L40 40 A170 170 0 0 1 280 40 Z" fill="#245c3f"/><path d="M160 150 L40 40 M160 150 L280 40" stroke="#f1ece0" stroke-opacity=".5" stroke-width="2"/><path d="M160 150 l-34 -32 34 -32 34 32 z" fill="#b9653b"/><circle cx="160" cy="96" r="12" fill="#b9653b"/><circle cx="214" cy="54" r="7" fill="#f1ece0"/><path d="M209 52 q5 3 0 7 M219 50 q-5 3 0 7" stroke="#d23a2e" stroke-width="1.4" fill="none"/><path d="M160 140 Q190 90 214 54" stroke="#ffb547" stroke-width="2" stroke-dasharray="3 5" fill="none"/>`,
+  fieldgoal: `<rect width="320" height="160" fill="#1f5236"/>${[0,1,2,3,4].map(i => `<rect x="0" y="${100 + i * 14}" width="320" height="2" fill="#f1ece0" opacity=".25"/>`).join('')}<path d="M130 100 V40 M190 100 V40 M130 72 H190 M160 72 V100" stroke="#ffd34d" stroke-width="5" stroke-linecap="round"/><ellipse cx="164" cy="56" rx="8" ry="5" fill="#8a4a24" transform="rotate(-30 164 56)"/><path d="M164 150 Q160 100 164 56" stroke="#ffb547" stroke-width="2" stroke-dasharray="3 5" fill="none"/><path d="M262 34 v34 M262 36 l26 6 -26 8" stroke="#f1ece0" stroke-width="2" fill="#d23a2e"/>`,
+  pk: `<rect width="320" height="160" fill="#22573a"/><rect x="70" y="34" width="180" height="84" fill="none" stroke="#f1ece0" stroke-width="5"/><path d="M70 34 h180 v84" stroke="#f1ece0" stroke-opacity=".2" stroke-width="1" fill="none"/>${[0,1,2,3,4,5,6,7].map(i => `<path d="M${80 + i * 22} 36 v80" stroke="#f1ece0" stroke-opacity=".12"/>`).join('')}<rect x="132" y="62" width="40" height="56" rx="10" fill="#ffb547"/><circle cx="152" cy="54" r="9" fill="#e9c08f"/><circle cx="226" cy="48" r="8" fill="#f1ece0"/><path d="M160 156 Q200 100 226 48" stroke="#ffb547" stroke-width="2" stroke-dasharray="3 5" fill="none"/><rect x="216" y="40" width="30" height="20" fill="none" stroke="#8fe0a0" stroke-width="2" stroke-dasharray="3 3"/>`,
+  golf: `<rect width="320" height="160" fill="#1a4a31"/><path d="M-10 160 C60 110 120 140 180 90 S290 40 330 50 V160 Z" fill="#2c6b45"/><ellipse cx="236" cy="66" rx="40" ry="16" fill="#3f8a57"/><ellipse cx="120" cy="120" rx="26" ry="10" fill="#d9c68f"/><path d="M240 66 V24" stroke="#f1ece0" stroke-width="2"/><path d="M240 24 l18 6 -18 6 z" fill="#d23a2e"/><circle cx="60" cy="140" r="5" fill="#f1ece0"/><path d="M60 140 Q150 0 236 64" stroke="#ffb547" stroke-width="2" stroke-dasharray="3 5" fill="none"/>`,
+  drag: `<rect width="320" height="160" fill="#16211c"/><rect x="0" y="70" width="320" height="70" fill="#2a2f2c"/><path d="M0 105 h320" stroke="#ffd34d" stroke-width="2" stroke-dasharray="14 10"/><rect x="40" y="18" width="16" height="48" rx="3" fill="#0b0f0d"/>${['#ffb547','#ffb547','#ffb547','#8fe0a0'].map((c, i) => `<circle cx="48" cy="${26 + i * 11}" r="4" fill="${c}"/>`).join('')}<path d="M150 92 h70 l14 -10 h30 l12 10 h12 v12 h-138 z" fill="#d23a2e"/><circle cx="170" cy="106" r="8" fill="#0b0f0d"/><circle cx="262" cy="106" r="8" fill="#0b0f0d"/><path d="M150 96 h-60 M150 102 h-40" stroke="#f1ece0" stroke-opacity=".4" stroke-width="2"/><circle cx="110" cy="128" r="1" fill="none"/>`
+};
+
+const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+const grid = document.getElementById('tiles');
+for (const g of GAMES) {
+  const a = document.createElement('a');
+  a.className = 'tile'; a.href = g.path;
+  a.innerHTML = `<svg class="art" viewBox="0 0 320 160" preserveAspectRatio="xMidYMid slice" aria-hidden="true">${ART[g.id]}</svg>
+    <div class="body"><h2 class="name">${esc(g.name)}</h2><p class="blurb">${esc(g.blurb)}</p>
+    <div class="foot"><div class="leader" id="lead-${g.id}">Today's leader<b>…</b></div><span class="play">Play</span></div></div>`;
+  grid.appendChild(a);
+}
+
+/* Today's leader per game, falling back to the all-time leader. */
+for (const g of GAMES) {
+  (async () => {
+    const el = document.getElementById('lead-' + g.id);
+    const today = await getTop({ game: g.id, mode: g.board, period: 'daily', limit: 1 });
+    let row = today && today[0], label = 'Today’s leader';
+    if (!row && today) {
+      const all = await getTop({ game: g.id, mode: g.board, period: 'all', limit: 1 });
+      row = all && all[0]; label = 'All-time leader';
+    }
+    if (!today) { el.innerHTML = 'Leaderboard<b>Offline</b>'; return; }
+    el.innerHTML = row
+      ? `${label}<b><span class="ini">${esc(cleanIni(row.initials) || '···')}</span>${esc(g.fmt(row.score))}</b>`
+      : 'Today’s leader<b>Open. Take it.</b>';
+  })();
+}
+
+/* Daily reset countdown (UTC midnight, matching the server). */
+const reset = document.getElementById('reset');
+function tick() {
+  const now = new Date();
+  const next = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1);
+  const m = Math.max(0, Math.floor((next - now) / 60000));
+  reset.textContent = `New challenge in ${Math.floor(m / 60)}h ${m % 60}m`;
+}
+tick(); setInterval(tick, 30000);

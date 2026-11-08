@@ -1,7 +1,7 @@
 {
   "name": "Sweet Spot",
   "short_name": "Sweet Spot",
-  "description": "Batting practice under the lights. Time your swing, stack hits for a bigger multiplier, and climb the leaderboard before you make three outs.",
+  "description": "Timing games: baseball, field goals, penalty kicks, golf and drag racing. Hit the small window at the right moment and climb the daily leaderboard.",
   "id": "/",
   "start_url": "/",
   "scope": "/",
