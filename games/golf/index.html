@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Sweet Spot Golf · Three-click swing</title>
+<meta name="description" content="A three-click swing on Sweet Spot National, an original 18-hole course. Play 3 to 18 holes for your best score to par, or arcade until your hearts run out.">
+<meta name="theme-color" content="#0b1611">
+<link rel="canonical" href="https://sweetspot.sawman.app/golf">
+<link rel="icon" href="/favicon.ico" sizes="48x48">
+<link rel="icon" href="/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/apple-touch-icon.png">
+<link rel="manifest" href="/site.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="Sweet Spot">
+<meta property="og:title" content="Sweet Spot Golf">
+<meta property="og:description" content="Tap to swing, tap for power, tap on the line. Wind, water, and sloped greens on an original 18-hole course.">
+<meta property="og:url" content="https://sweetspot.sawman.app/golf">
+<meta property="og:image" content="https://sweetspot.sawman.app/assets/og/golf.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:image" content="https://sweetspot.sawman.app/assets/og/golf.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/core/ui/game.css">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
+<script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
+<script defer src="/_vercel/insights/script.js"></script>
+<style>
+/* Golf only: club and aim buttons (bottom left, clear of the tap area), and a wrapping mode row. */
+#gctl{position:absolute;left:14px;bottom:16px;z-index:8;display:flex;flex-direction:column;gap:6px;opacity:0;visibility:hidden;transition:opacity .2s,visibility 0s .2s}
+#gctl.show{opacity:1;visibility:visible;transition:opacity .2s}
+#gctl .grow{display:flex;align-items:center;gap:4px;padding:3px;border-radius:25px;background:rgba(10,26,20,.86);border:1px solid rgba(241,236,224,.22);backdrop-filter:blur(6px)}
+#gctl button{width:42px;height:42px;padding:0;border-radius:50%;border:0;background:rgba(241,236,224,.1);color:var(--chalk);display:grid;place-items:center;cursor:pointer;touch-action:none}
+#gctl button:active{background:rgba(241,236,224,.3)}
+#gctl button:disabled{opacity:.3;cursor:default}
+#gctl svg{width:20px;height:20px}
+#gctl .gval{width:84px;text-align:center;display:flex;flex-direction:column;gap:3px}
+#gctl .gval b{font:800 17px/1 var(--display);color:var(--chalk);white-space:nowrap}
+#gctl .gval span{font:600 11px/1 var(--ui);color:var(--chalk-dim);white-space:nowrap}
+#optMode{flex-wrap:wrap}
+@media (max-width:640px){ #optMode button{padding:9px 9px} }
+</style>
+</head>
+<body>
+<div id="app"></div>
+<script type="module" src="/games/golf/main.js"></script>
+</body>
+</html>
