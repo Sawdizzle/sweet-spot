@@ -5,23 +5,23 @@
   "rewrites": [
     {
       "source": "/baseball",
-      "destination": "/games/baseball/index.html"
+      "destination": "/games/baseball"
     },
     {
       "source": "/fieldgoal",
-      "destination": "/games/fieldgoal/index.html"
+      "destination": "/games/fieldgoal"
     },
     {
       "source": "/pk",
-      "destination": "/games/pk/index.html"
+      "destination": "/games/pk"
     },
     {
       "source": "/golf",
-      "destination": "/games/golf/index.html"
+      "destination": "/games/golf"
     },
     {
       "source": "/drag",
-      "destination": "/games/drag/index.html"
+      "destination": "/games/drag"
     }
   ],
   "redirects": [
