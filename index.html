@@ -28,67 +28,33 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Big+Shoulders+Display:wght@600;700;800;900&family=Barlow:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.49.4/dist/umd/supabase.js"></script>
-<style>
-:root{
-  --night:#0b1611; --board:#143b2d; --board-2:#0e2a20; --edge:#2b5b48;
-  --chalk:#f1ece0; --chalk-dim:rgba(241,236,224,.64); --chalk-faint:rgba(241,236,224,.14);
-  --amber:#ffb547; --stitch:#d23a2e; --good:#8fe0a0;
-  --display:"Big Shoulders Display","Oswald","Arial Narrow",Impact,sans-serif;
-  --ui:"Barlow","Segoe UI",system-ui,sans-serif;
-  color-scheme:dark;
-}
-@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --night:#09130e; } }
-:root[data-theme="dark"]{ --night:#09130e; }
-*,*::before,*::after{box-sizing:border-box}
-html{background:var(--night)}
-body{margin:0;min-height:100vh;background:radial-gradient(1200px 600px at 50% -10%,rgba(255,181,71,.10),transparent 60%),var(--night);color:var(--chalk);font-family:var(--ui);-webkit-tap-highlight-color:transparent}
-a{color:inherit}
-main{width:min(1120px,100%);margin:0 auto;padding:calc(36px + env(safe-area-inset-top,0px)) 16px calc(40px + env(safe-area-inset-bottom,0px))}
-.top{display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;margin-bottom:22px}
-h1{margin:0;font:900 clamp(64px,12vw,132px)/.82 var(--display);letter-spacing:-.01em;text-shadow:0 6px 0 rgba(0,0,0,.3)}
-.seam{display:block;width:min(360px,80%);height:26px;margin:8px 0 0}
-.tag{margin:0;max-width:40ch;font:500 18px/1.45 var(--ui);color:var(--chalk-dim)}
-.daily{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:0 0 22px;padding:14px 16px;background:var(--board);border:2px solid var(--edge);border-radius:8px;box-shadow:inset 0 0 0 3px var(--board-2)}
-.daily b{font:800 22px/1 var(--display);color:var(--amber)}
-.daily span{font:500 15px/1.4 var(--ui);color:var(--chalk-dim);flex:1;min-width:220px}
-.daily .when{font:700 14px/1 var(--ui);color:var(--chalk);flex:none;min-width:0}
-.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:16px}
-.tile{position:relative;display:flex;flex-direction:column;background:var(--board-2);border:1px solid var(--chalk-faint);border-radius:10px;overflow:hidden;text-decoration:none;transition:transform .15s,border-color .15s}
-.tile:hover{transform:translateY(-2px);border-color:rgba(241,236,224,.4)}
-.tile:focus-visible{outline:3px solid var(--amber);outline-offset:3px}
-.art{display:block;width:100%;aspect-ratio:16/8;background:#0e2a20}
-.body{display:flex;flex-direction:column;gap:8px;padding:14px 16px 16px;flex:1}
-.name{margin:0;font:900 34px/.9 var(--display)}
-.blurb{margin:0;font:500 14.5px/1.45 var(--ui);color:var(--chalk-dim);flex:1}
-.foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:6px}
-.leader{display:flex;flex-direction:column;gap:3px;font:500 12px/1 var(--ui);color:var(--chalk-dim)}
-.leader b{font:800 20px/1 var(--display);color:var(--chalk);letter-spacing:.02em}
-.leader b .ini{color:#ffa630;letter-spacing:.1em;margin-right:8px}
-.play{flex:none;padding:11px 18px;border-radius:22px;background:var(--chalk);color:#10261d;font:900 20px/1 var(--display)}
-.tile:hover .play{background:#fff}
-footer{margin-top:28px;font:500 13px/1.5 var(--ui);color:var(--chalk-dim)}
-@media (max-width:640px){ .tag{font-size:16px} .grid{grid-template-columns:1fr} }
-@media (prefers-reduced-motion: reduce){ *{transition-duration:.01ms!important} }
-</style>
+<link rel="stylesheet" href="/landing/landing.css">
 <script>window.va = window.va || function () { (window.vaq = window.vaq || []).push(arguments); };</script>
 <script defer src="/_vercel/insights/script.js"></script>
 </head>
 <body>
+<div class="sky" aria-hidden="true"><i></i><i></i><i></i></div>
 <main>
-  <div class="top">
+  <section class="hero">
     <div>
-      <h1>Sweet<br>Spot</h1>
-      <svg class="seam" viewBox="0 0 360 26" aria-hidden="true"><path d="M2 20 C 90 2, 270 2, 358 20" fill="none" stroke="rgba(241,236,224,.35)" stroke-width="2"/><path d="M2 20 C 90 2, 270 2, 358 20" fill="none" stroke="#d23a2e" stroke-width="7" stroke-dasharray="2 9" stroke-linecap="round" transform="translate(0,-1)"/></svg>
+      <div class="brandrow"><span class="dot"></span>Six timing games</div>
+      <h1><span>Sweet</span><br><span>Spot</span></h1>
+      <svg class="seam" viewBox="0 0 360 26" aria-hidden="true"><path d="M2 20 C 90 2, 270 2, 358 20" fill="none" stroke="rgba(241,236,224,.35)" stroke-width="2"/><path class="st" d="M2 20 C 90 2, 270 2, 358 20" fill="none" stroke="#d23a2e" stroke-width="7" stroke-linecap="round" transform="translate(0,-1)"/></svg>
+      <p class="tag">Every game comes down to a small window and the moment you tap. One tap, space bar or click plays all of them, so a phone in one hand is enough.</p>
     </div>
-    <p class="tag">Six timing games. Each one comes down to a small window and the moment you tap. One tap, space bar or click plays every game, so a phone in one hand is enough.</p>
-  </div>
+    <div class="tryit" id="tryit" role="button" tabindex="0" aria-label="Practice meter. Tap or press space to stop the needle in the green.">
+      <div class="th"><b>Find the sweet spot</b><span id="tryBest">Tap to stop the needle</span></div>
+      <div class="bar"><i class="zone"></i><i class="needle" id="needle"></i></div>
+      <div class="msg"><b id="tryMsg">Tap anywhere here</b><span id="tryStreak"></span></div>
+    </div>
+  </section>
   <div class="daily" role="note">
     <b>Daily challenge</b>
-    <span>Every game has a daily mode: same pitches, wind, keeper and goalie spots, holes and shift bands for everyone today. Pick Daily on any game's menu.</span>
-    <span class="when" id="reset"></span>
+    <span>Same pitches, wind, keeper and goalie spots, holes and shift bands for everyone today. Pick Daily on any game's menu.</span>
+    <span class="clock" id="reset" aria-label="Time until the next daily challenge"></span>
   </div>
   <div class="grid" id="tiles"></div>
-  <footer>Scores go on a shared leaderboard with three initials. No account needed.</footer>
+  <footer><span>Scores go on a shared leaderboard with three initials. No account needed.</span><span>sweetspot.sawman.app</span></footer>
 </main>
 <script type="module" src="/landing/main.js"></script>
 </body>

@@ -31,6 +31,6 @@ export const GAMES = [
   {
     id: 'drag', name: 'Drag Racing', path: '/drag', board: 'classic',
     blurb: 'Launch on green, shift in the band, never touch redline. Race the leader’s ghost down the quarter mile.',
-    window: 'launch and shift points on the tach', fmt: secs
+    window: 'the green light and the shift band', fmt: secs
   }
 ];
