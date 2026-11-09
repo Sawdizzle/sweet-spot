@@ -16,6 +16,10 @@
       "destination": "/games/pk"
     },
     {
+      "source": "/hockey",
+      "destination": "/games/hockey"
+    },
+    {
       "source": "/golf",
       "destination": "/games/golf"
     },

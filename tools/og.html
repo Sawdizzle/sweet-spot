@@ -36,7 +36,7 @@ if (g) {
   const title = g.name.split(' ').join('<br>');
   card.innerHTML = `<div class="left"><div class="brand">Sweet Spot</div><h1>${title}</h1>${seam}<p>${g.blurb}</p></div><div class="art">${svg(g.id)}</div><div class="url">sweetspot.sawman.app${g.path}</div>`;
 } else {
-  card.innerHTML = `<div class="left"><h1>Sweet<br>Spot</h1>${seam}<p>Five timing games. Hit the small window at exactly the right moment.</p></div><div class="grid">${GAMES.map(x => svg(x.id)).join('')}</div><div class="url">sweetspot.sawman.app</div>`;
+  card.innerHTML = `<div class="left"><h1>Sweet<br>Spot</h1>${seam}<p>Six timing games. Hit the small window at exactly the right moment.</p></div><div class="grid">${GAMES.map(x => svg(x.id)).join('')}</div><div class="url">sweetspot.sawman.app</div>`;
 }
 document.fonts.ready.then(() => document.body.dataset.ready = '1');
 </script>

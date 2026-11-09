@@ -2,7 +2,7 @@
 Run from the repo root: python3 tools/dev-server.py 8766"""
 import http.server, os, sys
 
-GAMES = {"baseball", "fieldgoal", "pk", "golf", "drag"}
+GAMES = {"baseball", "fieldgoal", "pk", "hockey", "golf", "drag"}
 
 class Handler(http.server.SimpleHTTPRequestHandler):
     def translate_path(self, path):

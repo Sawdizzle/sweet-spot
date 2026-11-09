@@ -19,6 +19,11 @@ export const GAMES = [
     window: 'aim and power against a set keeper', fmt: v => v.toLocaleString() + ' pts'
   },
   {
+    id: 'hockey', name: 'Hockey Shootout', path: '/hockey', board: 'classic',
+    blurb: 'Skate in and pick your spot. Top shelf pays triple and the five-hole pays double, if the goalie leaves it open.',
+    window: 'aim and power against a set goalie', fmt: v => v.toLocaleString() + ' pts'
+  },
+  {
     id: 'golf', name: 'Golf', path: '/golf', board: 'course-9',
     blurb: 'Three-click swing on Sweet Spot National. Play 3 to 18 holes, or arcade until the hearts run out.',
     window: 'the three-click swing meter', fmt: toPar
