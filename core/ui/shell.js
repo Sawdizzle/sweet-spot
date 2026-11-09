@@ -197,8 +197,8 @@ export function mountShell(cfg) {
     state.playing = false;
     const boardMode = boardFor(mode), daily = !!mode.daily, period = daily ? 'daily' : 'all';
     const prev = localRuns(cfg.game, boardMode, period)[0];
-    const isPB = !prev || better(cfg.game, boardMode, score, prev.score);
-    recordLocal({ game: cfg.game, mode: boardMode, score, meta, daily });
+    const isPB = submit && (!prev || better(cfg.game, boardMode, score, prev.score));
+    if (submit) recordLocal({ game: cfg.game, mode: boardMode, score, meta, daily });   // runs with no valid score stay off the device board too
     state.lastRun = { score, meta };
 
     $('#oHead').textContent = head;
