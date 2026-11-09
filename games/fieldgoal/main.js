@@ -7,7 +7,7 @@ import { createMeter } from '../../core/meter/meter.js';
 import { nz, tn, coreSfx } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
 import C from './config.js';
-import { drawStadium, drawField, drawNet, drawHolder as artHolder, drawKicker, drawLineman, drawOfficial, drawBall as artBall, COL } from './art.js';
+import { drawStadium, drawField, drawNet, drawHolder as artHolder, drawKicker, drawLineman, drawOfficial, drawBall as artBall, COL, applyTeam } from './art.js';
 
 /* Local screenshot hook (localhost only): ?shot=aim|flight&dist=45&hash=L&touch=1&res=good&at=0.55 */
 const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
@@ -58,8 +58,11 @@ const shell = mountShell({
     : `I scored ${score} yards on Sweet Spot Field Goal.`,
   onStart: startRun,
   onAction: tap,
-  onMenu() { G.phase = 'idle'; }
+  onMenu() { G.phase = 'idle'; },
+  colors: { label: 'Jersey', default: 'crimson' },
+  onTeam(team) { applyTeam(team); bgKey = ''; }   // the cached stadium and field carry team paint
 });
+applyTeam(shell.team);
 
 /* ---------- Canvas ---------- */
 const cvs = shell.canvas, ctx = cvs.getContext('2d');
@@ -384,7 +387,7 @@ function drawPosts(now) {
   ctx.beginPath(); neck.forEach((p, i) => i ? ctx.lineTo(p[0] - lw * 0.3, p[1]) : ctx.moveTo(p[0] - lw * 0.3, p[1])); ctx.stroke();
   const padW = 0.62 * ps, padH = pb[1] - pt[1];
   const pg = ctx.createLinearGradient(pb[0] - padW / 2, 0, pb[0] + padW / 2, 0);
-  pg.addColorStop(0, COL.homeDark); pg.addColorStop(0.4, COL.home); pg.addColorStop(0.6, '#c2393b'); pg.addColorStop(1, COL.homeDark);
+  pg.addColorStop(0, COL.homeDark); pg.addColorStop(0.4, COL.home); pg.addColorStop(0.6, COL.homeHi); pg.addColorStop(1, COL.homeDark);
   ctx.fillStyle = pg; ctx.fillRect(pb[0] - padW / 2, pt[1], padW, padH);
   ctx.fillStyle = COL.cream; ctx.fillRect(pb[0] - padW / 2, pt[1] + padH * 0.1, padW, Math.max(1, padH * 0.06));
   ctx.fillRect(pb[0] - padW / 2, pt[1] + padH * 0.84, padW, Math.max(1, padH * 0.06));

@@ -3,12 +3,42 @@
    once per kick into an offscreen canvas and only redraws players, posts,
    ribbons and the ball every frame. */
 
+import { shade, isLight } from '../../core/ui/teams.js';
+
+/* The home colors below are filled in from the picked team by applyTeam. */
 export const COL = {
-  home: '#a3262a', homeDark: '#5e1416', cream: '#efe7d4', gold: '#e2b23c',
+  home: '#a3262a', homeDark: '#5e1416', homeEdge: '#7c1c1f', homeHi: '#c2393b', helmetLo: '#2a0809',
+  trim: '#2b1515', number: '#efe7d4', paint: '#a3262a', endZone: '#6e1a1d', crowdAlt: '#8f2422',
+  cream: '#efe7d4', gold: '#e2b23c',
   away: '#e9edf2', awayTrim: '#1f3b66', awayPants: '#c3c9d3',
   post: '#ffd34d', postHi: '#fff3b0', postLo: '#a87b10',
   skin: ['#e9b893', '#c98e64', '#8d5a3b', '#5c3b28', '#f2cfa8']
 };
+
+/* The rushers take the first kit on the list that stays clear of both team
+   colors, and a light team always faces a darker kit. */
+const AWAY_KITS = [
+  { away: '#e9edf2', awayTrim: '#1f3b66', awayPants: '#c3c9d3' },   // white and navy
+  { away: '#1f3b66', awayTrim: '#e9edf2', awayPants: '#c3c9d3' },   // navy and white
+  { away: '#6e1f2a', awayTrim: '#e9edf2', awayPants: '#c3c9d3' }    // maroon and white
+];
+const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+function colorDist(a, b) {                                     // weighted RGB distance, 0..~765
+  const [r1, g1, b1] = rgb(a), [r2, g2, b2] = rgb(b), rm = (r1 + r2) / 2;
+  return Math.sqrt((2 + rm / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rm) / 256) * (b1 - b2) ** 2);
+}
+const lum = hex => { const [r, g, b] = rgb(hex); return 0.299 * r + 0.587 * g + 0.114 * b; };
+export function applyTeam(t) {
+  const paint = isLight(t.j) ? t.h : t.j;                  // stadium paint stays dark enough for cream text
+  Object.assign(COL, {
+    home: t.j, homeDark: shade(t.j, -0.42), homeEdge: shade(t.j, -0.25), homeHi: shade(t.j, 0.12), helmetLo: shade(t.j, -0.82),
+    trim: t.h, number: Math.abs(lum(t.h) - lum(t.j)) > 70 ? t.h : isLight(t.j) ? '#1b1b1f' : '#f1ece0',
+    paint, endZone: shade(paint, -0.33), crowdAlt: shade(paint, -0.15),
+    ...(AWAY_KITS.find(k => colorDist(k.away, t.j) >= 180 && colorDist(k.away, t.h) >= 100 && !(isLight(t.j) && isLight(k.away))) || AWAY_KITS[2])
+  });
+  logoImg = null;                                          // the midfield logo carries the team colors
+}
+const rgba = (hex, a) => `rgba(${rgb(hex).join(',')},${a})`;
 
 export function rng(seed) {
   let a = seed >>> 0;
@@ -62,7 +92,7 @@ function logo() {
   if (logoImg) return logoImg;
   const S = 512, c = canvas(S, S), g = c.getContext('2d'), m = S / 2;
   const ring = (r, col) => { g.fillStyle = col; g.beginPath(); g.arc(m, m, r, 0, Math.PI * 2); g.fill(); };
-  ring(250, 'rgba(244,241,232,.92)'); ring(232, COL.home); ring(200, 'rgba(226,178,60,.95)'); ring(186, COL.homeDark);
+  ring(250, 'rgba(244,241,232,.92)'); ring(232, COL.paint); ring(200, 'rgba(226,178,60,.95)'); ring(186, shade(COL.paint, -0.42));
   // ball in the middle
   g.save(); g.translate(m, m); g.rotate(-0.5);
   g.fillStyle = '#7a3d1d'; g.beginPath(); g.ellipse(0, 0, 150, 92, 0, 0, Math.PI * 2); g.fill();
@@ -176,7 +206,7 @@ export function drawStadium(g, o) {
     g.fillStyle = '#f4f1e8'; g.font = `800 ${Math.round(bh * 0.42)}px ${DISPLAY}`;
     g.fillText(`${dist} YARD ATTEMPT`, cx, by + bh * 0.66, bw * 0.9);
     g.restore();
-    g.fillStyle = COL.home; g.fillRect(bx, by + bh - 3, bw, 3);
+    g.fillStyle = COL.paint; g.fillRect(bx, by + bh - 3, bw, 3);
   }
 
   /* upper deck crowd */
@@ -184,7 +214,7 @@ export function drawStadium(g, o) {
   crowd(g, r, yS1, yU1, W, cx, Math.max(3, ppy * 0.3), 0.985, 0.08, pts, 0.7);
   // upper fascia with a thin LED ribbon
   band(x => yU1(x) - 1, x => yU1(x) + span * 0.022, '#0a0d13');
-  ribbon(g, W, x => yU1(x) + span * 0.004, Math.max(3, span * 0.014), 'rgba(163,38,42,.85)', true);
+  ribbon(g, W, x => yU1(x) + span * 0.004, Math.max(3, span * 0.014), rgba(COL.paint, 0.85), true);
 
   /* suite level and the press box */
   band(yS1, yS0, '#0c1119');
@@ -222,7 +252,7 @@ export function drawStadium(g, o) {
 
   /* wall at field level with an LED ribbon board */
   g.fillStyle = '#0a0e14'; g.fillRect(0, wallTop, W, baseY - wallTop + 1);
-  ribbon(g, W, () => wallTop + (baseY - wallTop) * 0.12, Math.max(4, (baseY - wallTop) * 0.5), 'rgba(163,38,42,.95)', false, `${Math.round((baseY - wallTop) * 0.36)}px`);
+  ribbon(g, W, () => wallTop + (baseY - wallTop) * 0.12, Math.max(4, (baseY - wallTop) * 0.5), rgba(COL.paint, 0.95), false, `${Math.round((baseY - wallTop) * 0.36)}px`);
   g.fillStyle = 'rgba(30,70,45,.9)'; g.fillRect(0, baseY - (baseY - wallTop) * 0.3, W, (baseY - wallTop) * 0.3 + 1);
 
   /* light towers with lens glow */
@@ -280,7 +310,7 @@ function crowd(g, r, yBot, yTop, W, cx, row0, shrink, empty, pts, light) {
   for (let h = row0; sum < hc && hs.length < 80; h *= shrink) { hs.push(h); sum += h; }
   const F = [0]; for (const h of hs) F.push(F[F.length - 1] + h / sum);
   const sect = Math.max(70, W / 7), aisle = Math.max(3, row0 * 0.8);
-  const palette = [COL.home, COL.home, '#8f2422', COL.home, COL.cream, '#d9d2c2', COL.gold, '#1d2230', '#2b2f3a', '#3b5f8a', '#46613a', '#6a4a7a', '#c6763a', '#9aa3ad'];
+  const palette = [COL.home, COL.home, COL.crowdAlt, COL.home, COL.cream, '#d9d2c2', COL.gold, '#1d2230', '#2b2f3a', '#3b5f8a', '#46613a', '#6a4a7a', '#c6763a', '#9aa3ad'];
   for (let i = hs.length - 1; i >= 0; i--) {
     const fb = F[i], ft = F[i + 1];
     // riser line
@@ -345,7 +375,7 @@ export function drawField(g, o) {
     if ((Math.round((gl - z) / 5) + Math.round((x + side) / 5.33)) % 2) quad(x, Math.min(side, x + 5.33), Math.max(zNear, z - 5), z, 'rgba(255,255,255,.025)');
   }
   // end zone paint with a soft diagonal sheen
-  quad(-side, side, gl, dist, '#6e1a1d');
+  quad(-side, side, gl, dist, COL.endZone);
   for (let x = -side - 10; x < side; x += 2.4) {
     const a = P(clamp(x, -side, side), 0, gl), b = P(clamp(x + 1.2, -side, side), 0, gl), c = P(clamp(x + 1.2 + 10, -side, side), 0, dist), d = P(clamp(x + 10, -side, side), 0, dist);
     g.fillStyle = 'rgba(255,255,255,.035)'; g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.lineTo(c[0], c[1]); g.lineTo(d[0], d[1]); g.closePath(); g.fill();
@@ -464,7 +494,7 @@ function shadow(g, x, y, s, rx, alpha = 0.35) {
 function helmetBack(g, x, y, s, u, v, r, shell, stripe) {
   const cx = x + u * s, cy = y - v * s, R = r * s;
   const hg = g.createRadialGradient(cx - R * 0.35, cy - R * 0.4, R * 0.1, cx, cy, R * 1.1);
-  hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.18, shell); hg.addColorStop(1, '#2a0809');
+  hg.addColorStop(0, '#ffffff'); hg.addColorStop(0.18, shell); hg.addColorStop(1, COL.helmetLo);
   g.fillStyle = hg; g.beginPath(); g.ellipse(cx, cy, R, R * 1.02, 0, 0, Math.PI * 2); g.fill();
   if (stripe) { g.fillStyle = stripe; g.fillRect(cx - R * 0.14, cy - R, R * 0.28, R * 1.9); }
 }
@@ -488,15 +518,15 @@ export function drawHolder(g, x, y, s, { hasBall }) {
   limb(g, x, y, s, -0.22, 0.04, -0.2, 0.0, 0.14, cleat);
   // torso leaning forward
   const jg = g.createLinearGradient(x - 0.3 * s, 0, x + 0.3 * s, 0);
-  jg.addColorStop(0, COL.homeDark); jg.addColorStop(0.45, COL.home); jg.addColorStop(1, '#7c1c1f');
+  jg.addColorStop(0, COL.homeDark); jg.addColorStop(0.45, COL.home); jg.addColorStop(1, COL.homeEdge);
   blob(g, x, y, s, [[-0.19, 0.56], [0.2, 0.56], [0.3, 0.98], [0.2, 1.1], [-0.2, 1.1], [-0.3, 0.98]], jg);
-  g.fillStyle = COL.cream; g.fillRect(x - 0.19 * s, y - 0.6 * s, 0.39 * s, 0.05 * s);   // belt line
-  jerseyNumber(g, x, y, s, 0, 0.82, 0.28, '12', COL.cream);
+  g.fillStyle = COL.trim; g.fillRect(x - 0.19 * s, y - 0.6 * s, 0.39 * s, 0.05 * s);    // belt line
+  jerseyNumber(g, x, y, s, 0, 0.82, 0.28, '12', COL.number);
   // right arm to the ball, or lifted once it is kicked
   if (hasBall) { limb(g, x, y, s, 0.24, 1.0, 0.44, 0.66, 0.13, COL.home); limb(g, x, y, s, 0.44, 0.66, 0.55, 0.36, 0.1, '#1b1b1b'); }
   else { limb(g, x, y, s, 0.24, 1.0, 0.44, 0.92, 0.13, COL.home); limb(g, x, y, s, 0.44, 0.92, 0.5, 1.2, 0.1, '#1b1b1b'); }
   limb(g, x, y, s, -0.25, 1.0, -0.33, 0.72, 0.13, COL.home);
-  helmetBack(g, x, y, s, 0.02, 1.24, 0.15, COL.home, 'rgba(244,241,232,.85)');
+  helmetBack(g, x, y, s, 0.02, 1.24, 0.15, COL.home, COL.trim);
 }
 
 /* Kicker, back to the camera. k: 0 stance, 0..1 approach, swing 0..1 the kick. */
@@ -533,13 +563,13 @@ export function drawKicker(g, x, y, s, { swing = -1, step = 0, t = 0 }) {
   // torso
   const ox = lean;
   const jg = g.createLinearGradient(x - 0.3 * s, 0, x + 0.3 * s, 0);
-  jg.addColorStop(0, COL.homeDark); jg.addColorStop(0.45, COL.home); jg.addColorStop(1, '#7c1c1f');
+  jg.addColorStop(0, COL.homeDark); jg.addColorStop(0.45, COL.home); jg.addColorStop(1, COL.homeEdge);
   blob(g, x, y, s, [[-0.18, hipY - 0.04], [0.18, hipY - 0.04], [0.26 + ox, sh - 0.08], [0.18 + ox, sh + 0.02], [-0.18 + ox, sh + 0.02], [-0.26 + ox, sh - 0.08]], jg);
-  g.fillStyle = COL.cream; g.fillRect(x - 0.18 * s, y - (hipY + 0.02) * s, 0.36 * s, 0.05 * s);
-  jerseyNumber(g, x, y, s, ox * 0.6, 1.3, 0.3, '3', COL.cream);
+  g.fillStyle = COL.trim; g.fillRect(x - 0.18 * s, y - (hipY + 0.02) * s, 0.36 * s, 0.05 * s);
+  jerseyNumber(g, x, y, s, ox * 0.6, 1.3, 0.3, '3', COL.number);
   limb(g, x, y, s, -0.23 + ox, sh - 0.06, armL[0], armL[1], 0.12, COL.home);
   limb(g, x, y, s, 0.23 + ox, sh - 0.06, armR[0], armR[1], 0.12, COL.home);
-  helmetBack(g, x, y, s, ox, sh + 0.17, 0.15, COL.home, 'rgba(244,241,232,.85)');
+  helmetBack(g, x, y, s, ox, sh + 0.17, 0.15, COL.home, COL.trim);
   if (legBehind) kickLeg();
 }
 
@@ -562,8 +592,8 @@ export function drawLineman(g, x, y, s, { away = false, rise = 0, armsUp = false
     g.strokeStyle = 'rgba(200,205,215,.8)'; g.lineWidth = Math.max(1, R * 0.18);
     g.beginPath(); g.moveTo(cx - R * 0.6, cy + R * 0.1); g.lineTo(cx + R * 0.6, cy + R * 0.1); g.moveTo(cx - R * 0.5, cy + R * 0.45); g.lineTo(cx + R * 0.5, cy + R * 0.45); g.stroke();
   } else {
-    if (num) jerseyNumber(g, x, y, s, 0, h * 0.72, 0.24, num, COL.cream);
-    helmetBack(g, x, y, s, 0, h + 0.06, 0.15, COL.home, 'rgba(244,241,232,.8)');
+    if (num) jerseyNumber(g, x, y, s, 0, h * 0.72, 0.24, num, COL.number);
+    helmetBack(g, x, y, s, 0, h + 0.06, 0.15, COL.home, COL.trim);
   }
 }
 

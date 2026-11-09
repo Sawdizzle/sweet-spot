@@ -8,6 +8,7 @@ import { dailyRng, mulberry32 } from '../../core/seed/seed.js';
 import { createMeter } from '../../core/meter/meter.js';
 import { nz, tn, coreSfx } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
+import { shade, isLight } from '../../core/ui/teams.js';
 import C from './config.js';
 import { aimToX, xToAim, powerToY, yToPower, rollGoalie, resolveShot, isMiss, aimSegments, powerSegments, shotKind, goalieScale, shareText } from './logic.js';
 
@@ -71,8 +72,46 @@ const shell = mountShell({
   share: shareText,
   onStart: startRun,
   onAction: tap,
-  onMenu() { G.phase = 'idle'; }
+  onMenu() { G.phase = 'idle'; },
+  colors: { label: 'Jersey', default: 'crimson' },
+  onTeam: applyTeam
 });
+
+/* ---------- Team colors ----------
+   The shooter wears the picked team. The goalie takes the first kit on the
+   list that stays clear of both team colors, and a light team always faces
+   a darker goalie. Neither is part of the cached rink, so a pick shows on
+   the next frame. */
+const GOALIE_KITS = [
+  { jersey: '#1f4f8a', stripe: '#e6a52e' },   // navy
+  { jersey: '#8a2433', stripe: '#e6a52e' },   // maroon
+  { jersey: '#1e6a3c', stripe: '#e6a52e' },   // forest
+  { jersey: '#d9662a', stripe: '#1b1b1f' }    // orange
+];
+const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+function colorDist(a, b) {                                     // weighted RGB distance, 0..~765
+  const [r1, g1, b1] = rgb(a), [r2, g2, b2] = rgb(b), rm = (r1 + r2) / 2;
+  return Math.sqrt((2 + rm / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rm) / 256) * (b1 - b2) ** 2);
+}
+const lum = hex => { const [r, g, b] = rgb(hex); return 0.299 * r + 0.587 * g + 0.114 * b; };
+function goalieKit(team) {
+  return GOALIE_KITS.find(k => colorDist(k.jersey, team.j) >= 180 && colorDist(k.jersey, team.h) >= 100 && !(isLight(team.j) && isLight(k.jersey))) || GOALIE_KITS[1];
+}
+const SHOOTER_COL = {}, GOALIE_COL = {};
+function applyTeam(t) {
+  // the darker of the trim and a deep shade of the jersey: breezers, helmet, gloves
+  const dark = lum(t.h) < lum(t.j) && lum(t.h) < 80 ? t.h : shade(t.j, -0.6);
+  Object.assign(SHOOTER_COL, {
+    jersey: t.j, edge: shade(t.j, -0.28), trim: t.h, accent: dark, pants: dark, helmet: dark, gloves: dark, socks: t.j,
+    number: Math.abs(lum(t.h) - lum(t.j)) > 70 ? t.h : isLight(t.j) ? '#1b1b1f' : '#f1ece0'
+  });
+  const k = goalieKit(t);
+  Object.assign(GOALIE_COL, {
+    jersey: k.jersey, edge: shade(k.jersey, -0.22), shoulders: shade(k.jersey, -0.12), trim: '#f1ece0', stripe: k.stripe,
+    pad: '#f4f2ec', padTrim: k.jersey, pants: shade(k.jersey, -0.6), mask: '#e9edf2'
+  });
+}
+applyTeam(shell.team);
 
 /* ---------- Canvas ---------- */
 const cvs = shell.canvas, ctx = cvs.getContext('2d');
@@ -597,7 +636,6 @@ const SEG_DOT = { open: '#8fe0a0', topShelf: '#ffb547', fiveHole: '#6ec8ff' };
    bands in logic.js exactly: pads to padTop, blocker and glove to bodyHalf,
    shoulders and mask to headTop. He faces the shooter, so his blocker
    (right hand) is on screen left and his catching glove on screen right. */
-const GOALIE_COL = { jersey: '#1f4f8a', trim: '#f1ece0', stripe: '#e6a52e', pad: '#f4f2ec', padTrim: '#1f4f8a', pants: '#14233c', mask: '#e9edf2' };
 function drawGoalie(now) {
   const k = G.goalie, gc = C.goalie, s = k.scale;
   const shot = G.shot, saving = shot && shot.hitAt && shot.res.result === 'saved';
@@ -656,7 +694,7 @@ function drawGoalie(now) {
   const by = breathe;
   const chest = pts([[-0.25, gc.bodyTop - 0.02 + by], [0.25, gc.bodyTop - 0.02 + by], [0.23, pt + 0.06], [-0.23, pt + 0.06]]);
   const jg = X.createLinearGradient(at(-0.25, 0)[0], 0, at(0.25, 0)[0], 0);
-  jg.addColorStop(0, '#173d6c'); jg.addColorStop(0.5, GOALIE_COL.jersey); jg.addColorStop(1, '#173d6c');
+  jg.addColorStop(0, GOALIE_COL.edge); jg.addColorStop(0.5, GOALIE_COL.jersey); jg.addColorStop(1, GOALIE_COL.edge);
   smooth(chest, jg, 'rgba(0,0,0,.35)');
   // jersey stripes at the waist
   for (const [y, col] of [[pt + 0.12, GOALIE_COL.trim], [pt + 0.15, GOALIE_COL.stripe]]) {
@@ -665,7 +703,7 @@ function drawGoalie(now) {
     X.beginPath(); X.moveTo(a[0], a[1]); X.lineTo(b[0], b[1]); X.stroke();
   }
   // shoulders (the bulky upper body that covers to headHalf)
-  smooth(pts([[-gc.headHalf, gc.bodyTop + 0.06 + by], [gc.headHalf, gc.bodyTop + 0.06 + by], [0.25, gc.bodyTop - 0.06 + by], [-0.25, gc.bodyTop - 0.06 + by]]), '#1a4577', 'rgba(0,0,0,.3)');
+  smooth(pts([[-gc.headHalf, gc.bodyTop + 0.06 + by], [gc.headHalf, gc.bodyTop + 0.06 + by], [0.25, gc.bodyTop - 0.06 + by], [-0.25, gc.bodyTop - 0.06 + by]]), GOALIE_COL.shoulders, 'rgba(0,0,0,.3)');
   // crest: a plain circle with a chevron, no real marks
   const cr = at(0, (pt + gc.bodyTop) / 2 + 0.04);
   X.fillStyle = GOALIE_COL.trim; X.beginPath(); X.arc(cr[0], cr[1], Math.max(3, uy * 0.06), 0, Math.PI * 2); X.fill();
@@ -733,7 +771,6 @@ function drawGoalie(now) {
 /* ---------- The shooter ----------
    Seen from behind, skating in, stick on the ice with the puck on his
    forehand. Placed left of the puck so he does not block the net. */
-const SHOOTER_COL = { jersey: '#a8322b', trim: '#f1ece0', pants: '#141c2b', helmet: '#141c2b', socks: '#a8322b' };
 function shooterSpot() {
   // world x so his right shoulder clears the left post on screen
   const z = -0.75, s = P(0, 0, z)[2];
@@ -774,9 +811,9 @@ function drawShooter(now) {
   // jersey, back view, leaning forward a touch
   const lean = 0.06;
   const jg = X.createLinearGradient(at(-0.3, 0)[0], 0, at(0.3, 0)[0], 0);
-  jg.addColorStop(0, '#7d231e'); jg.addColorStop(0.45, SHOOTER_COL.jersey); jg.addColorStop(1, '#8a2822');
+  jg.addColorStop(0, SHOOTER_COL.edge); jg.addColorStop(0.45, SHOOTER_COL.jersey); jg.addColorStop(1, shade(SHOOTER_COL.jersey, -0.2));
   poly([at(-0.31, 1.52, lean), at(0.31, 1.52, lean), at(0.3, 0.96), at(-0.3, 0.96)], jg);
-  for (const [y, col, w] of [[1.06, SHOOTER_COL.trim, 0.05], [1.12, '#1d2c4a', 0.035]]) {
+  for (const [y, col, w] of [[1.06, SHOOTER_COL.trim, 0.05], [1.12, SHOOTER_COL.accent, 0.035]]) {
     const a = at(-0.3, y), b = at(0.3, y);
     X.strokeStyle = col; X.lineWidth = Math.max(1, u * w); X.beginPath(); X.moveTo(a[0], a[1]); X.lineTo(b[0], b[1]); X.stroke();
   }
@@ -784,8 +821,8 @@ function drawShooter(now) {
   const num = at(0, 1.3, lean * 0.6);
   X.save(); X.font = `800 ${Math.max(10, u * 0.3)}px "Big Shoulders Display", sans-serif`;
   X.textAlign = 'center'; X.textBaseline = 'middle';
-  X.lineWidth = Math.max(1, u * 0.025); X.strokeStyle = '#1d2c4a'; X.strokeText('17', num[0], num[1]);
-  X.fillStyle = SHOOTER_COL.trim; X.fillText('17', num[0], num[1]); X.restore();
+  X.lineWidth = Math.max(1, u * 0.025); X.strokeStyle = SHOOTER_COL.accent; X.strokeText('17', num[0], num[1]);
+  X.fillStyle = SHOOTER_COL.number; X.fillText('17', num[0], num[1]); X.restore();
   // stick: hands low and right, blade on the ice behind the puck; it whips through on the shot
   const bladeX = -0.16 + follow * 0.25, bladeY = 0.015 + follow * 0.45, bladeZ = 0.75 - 0.03 + follow * 0.35;
   const top = at(0.12 + follow * 0.1, 1.05 + follow * 0.25, 0.05);
@@ -805,7 +842,7 @@ function drawShooter(now) {
   limb(shR, lerp2(shR, low, 0.5, u * 0.04), 0.14, SHOOTER_COL.jersey);
   limb(lerp2(shR, low, 0.5, u * 0.04), low, 0.12, SHOOTER_COL.jersey);
   for (const g of [top, low]) {
-    X.fillStyle = '#1d2c4a'; roundRect(g[0] - u * 0.075, g[1] - u * 0.07, u * 0.15, u * 0.15, u * 0.04); X.fill();
+    X.fillStyle = SHOOTER_COL.gloves; roundRect(g[0] - u * 0.075, g[1] - u * 0.07, u * 0.15, u * 0.15, u * 0.04); X.fill();
     X.fillStyle = SHOOTER_COL.jersey; X.fillRect(g[0] - u * 0.075, g[1] + u * 0.02, u * 0.15, u * 0.035);
   }
   // shoulders yoke stripe

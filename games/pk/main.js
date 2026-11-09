@@ -7,6 +7,7 @@ import { dailyRng, mulberry32 } from '../../core/seed/seed.js';
 import { createMeter } from '../../core/meter/meter.js';
 import { nz, tn, coreSfx } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
+import { shade, isLight } from '../../core/ui/teams.js';
 import C from './config.js';
 import { aimToX, powerToY, rollKeeper, resolveShot, isMiss, aimSegments, powerSegments, keeperHalf, shareText } from './logic.js';
 
@@ -50,8 +51,41 @@ const shell = mountShell({
   share: shareText,
   onStart: startRun,
   onAction: tap,
-  onMenu() { G.phase = 'idle'; }
+  onMenu() { G.phase = 'idle'; },
+  colors: { label: 'Jersey', default: 'crimson' },
+  onTeam: applyTeam
 });
+
+/* ---------- Team colors ----------
+   The shooter wears the picked team. The keeper takes the first kit on the
+   list that stays clear of both team colors, and a light team always faces
+   a darker keeper kit. */
+const KEEPER_KITS = [
+  { shirt: '#e9a93a', shorts: '#1a1f2a', gloves: '#f1ece0' },   // amber
+  { shirt: '#2a2d36', shorts: '#14161b', gloves: '#e9a93a' },   // charcoal
+  { shirt: '#9fd13b', shorts: '#1a1f2a', gloves: '#f1ece0' },   // lime
+  { shirt: '#d9468f', shorts: '#1a1f2a', gloves: '#f1ece0' }    // pink
+];
+const rgb = hex => { const n = parseInt(hex.slice(1), 16); return [n >> 16, (n >> 8) & 255, n & 255]; };
+function colorDist(a, b) {                                     // weighted RGB distance, 0..~765
+  const [r1, g1, b1] = rgb(a), [r2, g2, b2] = rgb(b), rm = (r1 + r2) / 2;
+  return Math.sqrt((2 + rm / 256) * (r1 - r2) ** 2 + 4 * (g1 - g2) ** 2 + (2 + (255 - rm) / 256) * (b1 - b2) ** 2);
+}
+const lum = hex => { const [r, g, b] = rgb(hex); return 0.299 * r + 0.587 * g + 0.114 * b; };
+function keeperKit(team) {
+  return KEEPER_KITS.find(k => colorDist(k.shirt, team.j) >= 180 && colorDist(k.shirt, team.h) >= 100 && !(isLight(team.j) && isLight(k.shirt))) || KEEPER_KITS[1];
+}
+/* Number on the back: the trim color when it stands out from the shirt,
+   otherwise plain dark or light. */
+const numberColor = t => Math.abs(lum(t.h) - lum(t.j)) > 70 ? t.h : isLight(t.j) ? '#1b1b1f' : '#f1ece0';
+const KIT = {};
+function applyTeam(team) {
+  Object.assign(KIT, {
+    shirt: team.j, sleeve: shade(team.j, -0.12), shorts: team.h, socks: shade(team.j, -0.08),
+    number: numberColor(team), keeper: keeperKit(team)
+  });
+}
+applyTeam(shell.team);
 
 /* ---------- Canvas ---------- */
 const cvs = shell.canvas, ctx = cvs.getContext('2d');
@@ -351,14 +385,14 @@ function drawKeeper(now) {
   const hip = 0.95 + idle, sh = 1.5 + idle, headY = 1.78 + idle;
   // legs spread, knees bent
   for (const sgn of [-1, 1]) {
-    limb(at(sgn * 0.12, hip), at(sgn * half * 0.32, 0.5), 0.17, '#1a1f2a');
-    limb(at(sgn * half * 0.32, 0.5), at(sgn * half * 0.42, 0.05), 0.15, '#1a1f2a');
+    limb(at(sgn * 0.12, hip), at(sgn * half * 0.32, 0.5), 0.17, KIT.keeper.shorts);
+    limb(at(sgn * half * 0.32, 0.5), at(sgn * half * 0.42, 0.05), 0.15, KIT.keeper.shorts);
     const f = at(sgn * half * 0.45, 0.03);
     ctx.fillStyle = '#0a0d12'; ctx.beginPath(); ctx.ellipse(f[0], f[1], u * 0.13, u * 0.06, 0, 0, Math.PI * 2); ctx.fill();
   }
   // shorts + jersey
-  poly([at(-0.24, hip + 0.18), at(0.24, hip + 0.18), at(0.26, hip - 0.12), at(-0.26, hip - 0.12)], '#1a1f2a');
-  poly([at(-0.28, sh + 0.05), at(0.28, sh + 0.05), at(0.24, hip + 0.12), at(-0.24, hip + 0.12)], '#e9a93a');
+  poly([at(-0.24, hip + 0.18), at(0.24, hip + 0.18), at(0.26, hip - 0.12), at(-0.26, hip - 0.12)], KIT.keeper.shorts);
+  poly([at(-0.28, sh + 0.05), at(0.28, sh + 0.05), at(0.24, hip + 0.12), at(-0.24, hip + 0.12)], KIT.keeper.shirt);
   ctx.strokeStyle = 'rgba(11,22,17,.5)'; ctx.lineWidth = Math.max(1, u * 0.04);
   const c0 = at(-0.26, sh - 0.12), c1 = at(0.26, sh - 0.12);
   ctx.beginPath(); ctx.moveTo(c0[0], c0[1]); ctx.lineTo(c1[0], c1[1]); ctx.stroke();
@@ -367,10 +401,10 @@ function drawKeeper(now) {
     const flinch = saving && sgn === k.lean ? 0.12 : 0;
     const handX = sgn * (half - 0.08), handY = reach - 0.12 + flinch;
     const elbow = at(sgn * (0.28 + (half - 0.28) * 0.5), lerp(sh, handY, 0.4));
-    limb(at(sgn * 0.26, sh), elbow, 0.13, '#e9a93a');
-    limb(elbow, at(handX, handY), 0.11, '#e9a93a');
+    limb(at(sgn * 0.26, sh), elbow, 0.13, KIT.keeper.shirt);
+    limb(elbow, at(handX, handY), 0.11, KIT.keeper.shirt);
     const g = at(handX, handY);
-    ctx.fillStyle = '#f1ece0'; ctx.beginPath(); ctx.arc(g[0], g[1], Math.max(3, u * 0.12), 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = KIT.keeper.gloves; ctx.beginPath(); ctx.arc(g[0], g[1], Math.max(3, u * 0.12), 0, Math.PI * 2); ctx.fill();
   }
   // head
   const hd = at(0, headY);
@@ -388,14 +422,14 @@ function drawShooter() {
   ctx.lineCap = 'round';
   const kicked = G.shot ? 1 : 0;
   const limb = (a, b, w, col) => { ctx.strokeStyle = col; ctx.lineWidth = Math.max(2, w * u); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); };
-  limb(at(-0.1, 0.9), at(-0.13, 0.05), 0.15, '#e6e1d6');                 // standing leg (socks)
-  limb(at(0.1, 0.9), at(0.16 + kicked * 0.25, 0.08 + kicked * 0.25), 0.15, '#e6e1d6');
-  poly([at(-0.22, 1.0), at(0.22, 1.0), at(0.24, 0.72), at(-0.24, 0.72)], '#f1ece0');   // shorts
-  poly([at(-0.25, 1.48), at(0.25, 1.48), at(0.22, 0.96), at(-0.22, 0.96)], '#b0352c'); // jersey, back view
-  limb(at(-0.24, 1.42), at(-0.42, 1.0), 0.1, '#b0352c');
-  limb(at(0.24, 1.42), at(0.42 + kicked * 0.1, 1.05), 0.1, '#b0352c');
+  limb(at(-0.1, 0.9), at(-0.13, 0.05), 0.15, KIT.socks);                  // standing leg (socks)
+  limb(at(0.1, 0.9), at(0.16 + kicked * 0.25, 0.08 + kicked * 0.25), 0.15, KIT.socks);
+  poly([at(-0.22, 1.0), at(0.22, 1.0), at(0.24, 0.72), at(-0.24, 0.72)], KIT.shorts);   // shorts
+  poly([at(-0.25, 1.48), at(0.25, 1.48), at(0.22, 0.96), at(-0.22, 0.96)], KIT.shirt); // jersey, back view
+  limb(at(-0.24, 1.42), at(-0.42, 1.0), 0.1, KIT.sleeve);
+  limb(at(0.24, 1.42), at(0.42 + kicked * 0.1, 1.05), 0.1, KIT.sleeve);
   const num = at(0, 1.2);
-  ctx.save(); ctx.fillStyle = '#f1ece0'; ctx.font = `800 ${Math.max(8, u * 0.32)}px "Big Shoulders Display", sans-serif`;
+  ctx.save(); ctx.fillStyle = KIT.number; ctx.font = `800 ${Math.max(8, u * 0.32)}px "Big Shoulders Display", sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('9', num[0], num[1]); ctx.restore();
   const hd = at(0, 1.62);
   ctx.fillStyle = '#3a2618'; ctx.beginPath(); ctx.arc(hd[0], hd[1], u * 0.12, 0, Math.PI * 2); ctx.fill();
