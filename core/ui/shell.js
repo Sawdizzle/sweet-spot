@@ -68,7 +68,7 @@ export function mountShell(cfg) {
     <p class="note" id="boardNote">Loading the board…</p>
   </aside>
   <section id="menu" class="overlay show" aria-label="Start"><div class="card">
-    <p class="brand"><a href="/">Sweet Spot</a></p>
+    <p class="brand"><a href="/"><img src="/assets/logo-mark.svg" alt="" width="26" height="26">Sweet Spot</a></p>
     <h1 class="title">${cfg.titleHtml}</h1>
     <svg class="seam" viewBox="0 0 360 30" aria-hidden="true"><path d="M2 22 C 90 2, 270 2, 358 22" fill="none" stroke="rgba(241,236,224,.35)" stroke-width="2"/><path d="M2 22 C 90 2, 270 2, 358 22" fill="none" stroke="#d23a2e" stroke-width="7" stroke-dasharray="2 9" stroke-linecap="round" transform="translate(0,-1)"/></svg>
     <p class="lede">${esc(cfg.lede)}</p>

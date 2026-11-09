@@ -238,7 +238,8 @@ html,button,.ch{touch-action:manipulation}
 .ctl a.btn svg{width:18px;height:18px}
 .ctl a.btn:focus-visible{outline:3px solid var(--amber);outline-offset:2px}
 .brand{margin:0 0 10px;font:800 15px/1 var(--display);letter-spacing:.14em;text-transform:uppercase}
-.brand a{color:var(--amber);text-decoration:none}
+.brand a{color:var(--amber);text-decoration:none;display:inline-flex;align-items:center;gap:9px}
+.brand img{width:26px;height:26px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.4))}
 #callout.good .big{color:var(--good)}
 #callout.bad .big{color:var(--bad)}
 #callout.gold .big{color:var(--amber);text-shadow:0 5px 0 rgba(90,40,0,.5),0 0 40px rgba(255,170,60,.5)}
