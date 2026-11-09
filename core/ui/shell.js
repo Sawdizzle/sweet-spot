@@ -18,19 +18,23 @@
      share: (score, meta) => 'I made a 58-yarder on Sweet Spot',
      onStart(mode) {},                       // begin a run (mode object from `modes`)
      onAction(time, event) {},               // tap / space / click during play
-     onMenu() {}                             // optional: back at the menu
+     onMenu() {},                            // optional: back at the menu
+     colors: { label: 'Jersey', default: 'crimson' },  // optional team color picker
+     onTeam(team) {}                         // optional: { id, name, j, h } picked
    });
 
    shell.set(id, value, { pulse })   update a HUD cell
    shell.hearts.set(n)               lives display (core/hearts)
    shell.callout(big, sub, cls)      big centered text ('good' | 'bad' | 'gold')
    shell.gameOver({ score, head, line, stats: [[label, value]], meta })
-   shell.playing                     true between onStart and gameOver */
+   shell.playing                     true between onStart and gameOver
+   shell.team                        current team colors { id, name, j, h } (core/ui/teams.js) */
 import { $, TOUCH, store } from '../util.js';
 import { ensureAudio, bindMuteButton, toggleMute } from '../audio/audio.js';
 import { createHearts, HEART_PLAIN } from '../hearts/hearts.js';
 import { createInitials, savedIni, cleanIni } from '../initials/initials.js';
 import { identity } from '../leaderboard/client.js';
+import { TEAMS, getTeam, setTeam } from './teams.js';
 import { submitScore, getTop, recordLocal, localRuns, better, lowerIsBetter } from '../leaderboard/scores.js';
 
 const esc = s => String(s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -72,6 +76,7 @@ export function mountShell(cfg) {
     <div class="opts">
       <div class="opt"><span class="ol">Mode</span><div class="seg" id="optMode">${modes.map(m => `<button data-v="${m.id}">${esc(m.label)}</button>`).join('')}</div></div>
       <p class="optnote" id="modeNote"></p>
+      ${cfg.colors ? `<div class="opt"><span class="ol">${esc(cfg.colors.label || 'Colors')}</span><div class="sws" id="optTeam"></div></div>` : ''}
       ${cfg.extraOptsHtml || ''}
     </div>
     <span class="plate-wrap"><button class="plate" id="play">${esc(cfg.playLabel || 'Play')}</button></span>
@@ -107,6 +112,24 @@ export function mountShell(cfg) {
 
   const state = { playing: false, lastRun: null, boardTab: cfg.boards[0].id, tok: 0 };
   const startHint = TOUCH ? 'Tap anywhere to play.' : 'Press <kbd>Space</kbd> to start.';
+
+  /* ---------- Team colors ---------- */
+  let team = getTeam(cfg.game, cfg.colors && cfg.colors.default);
+  if (cfg.colors) {
+    const tw = $('#optTeam');
+    for (const t of TEAMS) {
+      const b = document.createElement('button');
+      b.type = 'button'; b.dataset.v = t.id; b.setAttribute('aria-label', t.name); b.title = t.name;
+      b.style.setProperty('--j', t.j); b.style.setProperty('--h', t.h);
+      b.addEventListener('click', () => {
+        team = setTeam(cfg.game, t.id);
+        tw.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === team.id)));
+        if (cfg.onTeam) cfg.onTeam(team);
+      });
+      tw.appendChild(b);
+    }
+    tw.querySelectorAll('button').forEach(x => x.setAttribute('aria-pressed', String(x.dataset.v === team.id)));
+  }
 
   /* ---------- Menu ---------- */
   function renderOpts() {
@@ -294,6 +317,7 @@ export function mountShell(cfg) {
   return {
     canvas, hearts, set, callout, gameOver, toMenu, renderBoard,
     get playing() { return state.playing; },
-    get mode() { return mode; }
+    get mode() { return mode; },
+    get team() { return team; }
   };
 }
