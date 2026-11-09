@@ -248,3 +248,5 @@ html,button,.ch{touch-action:manipulation}
   .sb .cell{grid-column:auto}
   .ctl a.btn .t{display:none}
 }
+a.ghost-btn{display:inline-flex;align-items:center;color:var(--chalk);text-decoration:none}
+.hint a.back{font:700 15px/1 var(--ui);color:var(--amber);border-bottom:0}

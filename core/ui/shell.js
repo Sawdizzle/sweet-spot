@@ -76,6 +76,7 @@ export function mountShell(cfg) {
     </div>
     <span class="plate-wrap"><button class="plate" id="play">${esc(cfg.playLabel || 'Play')}</button></span>
     <p class="hint" id="menuBest"></p>
+    <p class="hint"><a class="back" href="/">← All games</a></p>
   </div></section>
   <section id="over" class="overlay" aria-label="Run summary"><div class="card">
     <h2 class="oh" id="oHead">Game over</h2>
@@ -92,7 +93,8 @@ export function mountShell(cfg) {
     <div class="orow" id="oActions">
       <span class="plate-wrap"><button class="plate" id="again">${esc(cfg.againLabel || 'Play again')}</button></span>
       <button class="ghost-btn" id="share">Share</button>
-      <button class="ghost-btn" id="toMenu">Main menu</button>
+      <button class="ghost-btn" id="toMenu">${esc(cfg.name)} menu</button>
+      <a class="ghost-btn" href="/">All games</a>
       <button class="ghost-btn" id="seeBoard">Leaderboard</button>
     </div>
     <p class="note" id="oNote"></p>
