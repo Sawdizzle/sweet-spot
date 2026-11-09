@@ -5,6 +5,8 @@
      race.baseEtMs. Every launch and shift adds a signed time loss
      (negative = a perfect-shift boost). The car pays a loss by running
      slower for a moment, so the time it costs shows on screen.
+   - The tap on green is the launch. Only reaction time matters there; a
+     very quick reaction banks a small boost.
    - Elapsed time = reaction + baseEtMs + all losses. The step sim below
      reproduces that exactly, and ghosts replay through the same sim.
    - Each run draws a fixed number of random values (makeRunParams), so a
@@ -72,17 +74,14 @@ export const trapMph = (finishT, profile = PROFILE) =>
   Math.round(C.race.baseTrapMph * Math.pow(profile.tauFinish / Math.max(1, finishT), C.race.trapExp) * 10) / 10;
 
 /* ---------- Per-run randomness ----------
-   Always exactly 5 + 3 * (gears - 1) draws. */
+   Always exactly 5 + 3 * (gears - 1) draws. Four of them used to set the
+   launch band; they are still drawn (and dropped) so a given seed keeps the
+   same green delay and shift bands as before the launch change. */
 export const DRAWS_PER_RUN = 5 + 3 * TOP;
 export function makeRunParams(rng) {
-  const T = C.tree, R = C.rev, Lc = C.launch, S = C.shift;
-  const p = {
-    greenDelay: Math.round(lerp(T.greenMinMs, T.greenMaxMs, rng())),
-    revSpeed: lerp(R.speedMin, R.speedMax, rng()),
-    revPhase: rng() * 2,
-    launch: { w: lerp(Lc.widthMin, Lc.widthMax, rng()), c: Lc.center + (rng() - 0.5) * Lc.centerJitter },
-    gears: []
-  };
+  const T = C.tree, S = C.shift;
+  const p = { greenDelay: Math.round(lerp(T.greenMinMs, T.greenMaxMs, rng())), gears: [] };
+  for (let i = 0; i < 4; i++) rng();
   for (let g = 0; g < TOP; g++) {
     p.gears.push({
       rise: Math.round(S.riseMs[g] * (1 + (rng() * 2 - 1) * S.riseJitter)),
@@ -113,11 +112,8 @@ export function startTap(p, ms) {
 }
 
 /* ---------- Tach ---------- */
-export function revNeedle(p, ms) {
-  const k = (p.revPhase + Math.max(0, ms) / 1000 * p.revSpeed) % 2;
-  const tri = k <= 1 ? k : 2 - k;
-  return lerp(C.rev.lo, C.rev.hi, (1 - Math.cos(Math.PI * tri)) / 2);
-}
+/* Needle while staged: held on the two-step, a little lively. Visual only. */
+export const stagedRpm = ms => 0.46 + 0.035 * Math.sin(ms / 95) + 0.02 * Math.sin(ms / 37);
 const ease = u => 1 - Math.pow(1 - clamp(u, 0, 1), C.shift.easePow);
 const invEase = y => 1 - Math.pow(1 - clamp(y, 0, 1), 1 / C.shift.easePow);
 
@@ -133,21 +129,17 @@ export function timeForRpm(p, g, rpm) {
   return invEase((rpm - lo) / (1 - lo)) * p.gears[g].rise;
 }
 export function band(p, g) {
-  const b = g < 0 ? p.launch : p.gears[g];
-  const ph = g < 0 ? C.launch.perfectHalf : b.ph;
-  return { lo: b.c - b.w / 2, hi: b.c + b.w / 2, c: b.c, plo: b.c - ph, phi: b.c + ph };
+  const b = p.gears[g];
+  return { lo: b.c - b.w / 2, hi: b.c + b.w / 2, c: b.c, plo: b.c - b.ph, phi: b.c + b.ph };
 }
 export const blowAtMs = (p, g) => g >= TOP ? Infinity : p.gears[g].rise + C.shift.blowMs;
 export const isBlown = (p, g, ms) => ms >= blowAtMs(p, g) + C.shift.blowGraceMs;
 
-/* Launch: rpm is the needle at the tap. */
-export function judgeLaunch(p, rpm) {
-  const Lc = C.launch, b = band(p, -1);
-  const off = Math.abs(rpm - b.c);
-  if (off <= Lc.perfectHalf) return { zone: 'perfect', loss: -Lc.perfectBoostMs, rpm };
-  if (rpm >= b.lo && rpm <= b.hi) return { zone: 'good', loss: Math.round(Lc.goodMaxMs * (off - Lc.perfectHalf) / (b.c - b.lo - Lc.perfectHalf)), rpm };
-  if (rpm < b.lo) return { zone: 'bog', loss: Math.round(Math.min(Lc.maxMs, Lc.bogBaseMs + Lc.bogPerRpm * (b.lo - rpm))), rpm };
-  return { zone: 'spin', loss: Math.round(Math.min(Lc.maxMs, Lc.spinBaseMs + Lc.spinPerRpm * (rpm - b.hi))), rpm };
+/* Launch: judged on reaction time alone (ms from green to the tap). */
+export function judgeLaunch(reaction) {
+  const Lc = C.launch;
+  if (reaction <= Lc.perfectMs) return { zone: 'perfect', loss: -Lc.perfectBoostMs, reaction };
+  return { zone: reaction <= Lc.goodMs ? 'good' : 'slow', loss: 0, reaction };
 }
 
 /* Shift out of gear g, ms after the gear started. */
@@ -164,7 +156,8 @@ export function judgeShift(p, g, ms) {
 }
 
 /* ---------- Ghost ----------
-   { r: reaction ms, l: launch loss ms, s: [[ms after launch, loss ms], ...], e: elapsed ms } */
+   { r: reaction ms, l: launch loss ms (0 or the perfect boost; ghosts saved
+   before launch-on-green carry the old band loss, which still replays fine), s: [[ms after launch, loss ms], ...], e: elapsed ms } */
 const int = v => Math.round(Number(v));
 export function encodeGhost({ r, l, s, e }) {
   return { r: int(r), l: int(l), s: s.slice(0, TOP).map(([t, x]) => [int(t), int(x)]), e: int(e) };

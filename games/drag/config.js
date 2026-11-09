@@ -14,19 +14,13 @@ export default {
     timeoutMs: 4000            // no launch this long after green counts as a fault
   },
 
-  /* Revving on the line: the needle sweeps up and down until launch. */
-  rev: { lo: 0.18, hi: 0.96, speedMin: 0.6, speedMax: 0.9 },   // sweeps per second
-
+  /* Launch: the tap on green is the launch. Reaction time is the only thing
+     that counts; a very quick one also gets a small boost off the line. */
   launch: {
-    center: 0.62, centerJitter: 0.08,      // launch band center, +/- half the jitter per run
-    widthMin: 0.12, widthMax: 0.17,
-    perfectHalf: 0.022,
-    perfectBoostMs: 15,
-    goodMaxMs: 40,             // in the band but off center costs up to this
-    bogBaseMs: 110, bogPerRpm: 1100,       // too low
-    spinBaseMs: 140, spinPerRpm: 1300,     // too high: wheelspin
-    maxMs: 650,
-    spinShowMs: 700            // how long the tires smoke on a wheelspin launch
+    perfectMs: 150,            // reaction at or under this is a perfect launch
+    perfectBoostMs: 25,
+    goodMs: 260,               // under this reads as a good launch; slower just costs its reaction
+    smokeMs: 650               // tire smoke after the launch
   },
 
   shift: {
@@ -60,8 +54,8 @@ export default {
   },
 
   /* Built-in ghost when there is no leader or the board is offline.
-     r: reaction ms, l: launch loss ms, s: [ms after launch, loss ms] per shift. */
-  house: { name: 'House car', r: 320, l: 120, s: [[900, 90], [2100, 110], [3600, 130], [5350, 100]] },
+     r: reaction ms, l: launch loss ms (0, or the perfect launch boost), s: [ms after launch, loss ms] per shift. */
+  house: { name: 'House car', r: 330, l: 0, s: [[900, 110], [2100, 130], [3600, 150], [5350, 120]] },
 
   resultSecs: 2.6,
   tapAfterResultMs: 800        // a tap can skip the result screen after this long
