@@ -6,6 +6,7 @@ import { clamp, REDUCE } from '../../core/util.js';
 import { dailyRng, mulberry32 } from '../../core/seed/seed.js';
 import { A, nz, tn, coreSfx, onAudioReady } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
+import { shade, isLight } from '../../core/ui/teams.js';
 import { getTop } from '../../core/leaderboard/scores.js';
 import { cleanIni } from '../../core/initials/initials.js';
 import { secs } from '../../core/games.js';
@@ -82,7 +83,9 @@ const shell = mountShell({
     : `I ran a ${s3(score)} on Sweet Spot Drag Racing${meta && meta.trap ? ` at ${Math.round(meta.trap)} mph` : ''}.`,
   onStart: startSession,
   onAction: tap,
-  onMenu() { G.phase = 'idle'; setDrone(0, 0); }
+  onMenu() { G.phase = 'idle'; setDrone(0, 0); },
+  colors: { label: 'Car', default: 'crimson' },
+  onTeam: applyTeam
 });
 
 /* ---------- Canvas ---------- */
@@ -333,6 +336,36 @@ const FT = 0.3048;
 const BOARDS = [[60, '60 FT'], [330, '330 FT'], [660, '660 FT'], [1000, '1000 FT']];
 let AX = 0, CX = 0, PPM = 1, LY = null;
 const X = (m, s) => AX + (m - CX) * PPM * s;
+/* ---------- Team colors ----------
+   The player's car wears the picked team colors. The ghost stays a
+   translucent tint: amber by default, ice blue when the team itself is
+   amber, gold or orange, so the two cars never read alike. */
+const GHOST_AMBER = { a: '255,181,71', l1: '255,226,170', l2: '255,200,120', l3: '255,220,160', p: '255,240,210', d: '190,120,30', k1: '40,30,10', k2: '20,14,4', k3: '30,22,8', k4: '60,40,10', hex: '#ffb547' };
+const GHOST_ICE = { a: '110,190,255', l1: '190,228,255', l2: '150,210,255', l3: '185,225,255', p: '225,242,255', d: '40,110,190', k1: '8,22,40', k2: '4,12,22', k3: '6,16,30', k4: '12,36,62', hex: '#6ebeff' };
+function hsl(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = ((n >> 8) & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  if (!d) return { h: 0, s: 0, l };
+  const s = d / (1 - Math.abs(2 * l - 1));
+  const h = mx === r ? ((g - b) / d + 6) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return { h: h * 60, s, l };
+}
+/* Close to the amber ghost: a saturated, mid-light color within 28 degrees of its hue. */
+function nearAmber(hex) { const c = hsl(hex); return c.s > 0.35 && c.l > 0.25 && c.l < 0.85 && Math.abs(c.h - 36) < 28; }
+const lum = hex => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+let TEAM = shell.team, GP = GHOST_AMBER, ACCENT = '#b0352c';
+const ga = (k, a) => `rgba(${GP[k]},${a})`;
+function setTeamColors(t) {
+  TEAM = t;
+  GP = nearAmber(t.j) || nearAmber(t.h) ? GHOST_ICE : GHOST_AMBER;
+  ACCENT = lum(t.j) > 60 ? t.j : t.h;       // progress bar fill that shows on the dark wall
+}
+function applyTeam(t) {
+  setTeamColors(t);
+  if (K.key) { const cl = K.car.cl; K.car = buildCar(cl, false); K.ghostCar = buildCar(cl, true); }
+}
+setTeamColors(shell.team);
+
 const sAt = y => S_TOP + (1 - S_TOP) * clamp((y - LY.trackT) / LY.th, 0, 1);
 const hash = n => { const v = Math.sin(n * 127.1 + 311.7) * 43758.5453; return v - Math.floor(v); };
 const posMod = (a, b) => ((a % b) + b) % b;
@@ -506,12 +539,12 @@ function buildCar(cl, ghost) {
   const mv = (u, v) => x.moveTo(...P(u, v)), ln = (u, v) => x.lineTo(...P(u, v));
   const qc = (cu, cv, u, v) => { const [a, b] = P(cu, cv), [c, d] = P(u, v); x.quadraticCurveTo(a, b, c, d); };
   // wheelie bar: two struts and a small wheel that sits just off the ground
-  x.strokeStyle = ghost ? 'rgba(255,181,71,.7)' : '#3a3d42'; x.lineWidth = Math.max(1.2, cl * 0.011);
+  x.strokeStyle = ghost ? ga('a', .7) : '#3a3d42'; x.lineWidth = Math.max(1.2, cl * 0.011);
   x.beginPath(); mv(0.12, 0.06); ln(-0.25, 0.03); mv(0.06, 0.1); ln(-0.25, 0.03); x.stroke();
-  x.fillStyle = ghost ? 'rgba(255,181,71,.5)' : '#111'; x.beginPath(); x.arc(...P(-0.25, 0.028), cl * 0.022, 0, Math.PI * 2); x.fill();
-  x.fillStyle = ghost ? 'rgba(255,181,71,.7)' : '#9aa0a6'; x.beginPath(); x.arc(...P(-0.25, 0.028), cl * 0.009, 0, Math.PI * 2); x.fill();
+  x.fillStyle = ghost ? ga('a', .5) : '#111'; x.beginPath(); x.arc(...P(-0.25, 0.028), cl * 0.022, 0, Math.PI * 2); x.fill();
+  x.fillStyle = ghost ? ga('a', .7) : '#9aa0a6'; x.beginPath(); x.arc(...P(-0.25, 0.028), cl * 0.009, 0, Math.PI * 2); x.fill();
   // dark wheel wells
-  x.fillStyle = ghost ? 'rgba(20,14,4,.6)' : '#07080a';
+  x.fillStyle = ghost ? ga('k2', .6) : '#07080a';
   for (const [u, r] of [[CAR.rearX, CAR.rearR], [CAR.frontX, CAR.frontR]]) { x.beginPath(); x.arc(...P(u, r), (r + 0.014) * cl, Math.PI, 0); x.fill(); }
   // body outline
   const body = () => {
@@ -530,15 +563,16 @@ function buildCar(cl, ghost) {
   body();
   const [, topY] = P(0, 0.29);
   const g = x.createLinearGradient(0, topY, 0, gy);
-  if (ghost) { g.addColorStop(0, 'rgba(255,226,170,.75)'); g.addColorStop(0.5, 'rgba(255,181,71,.5)'); g.addColorStop(1, 'rgba(190,120,30,.45)'); }
-  else { g.addColorStop(0, '#ff8a6e'); g.addColorStop(0.28, '#e2432f'); g.addColorStop(0.62, '#a92a1e'); g.addColorStop(1, '#4a110b'); }
+  const J = TEAM.j, Hc = TEAM.h;
+  if (ghost) { g.addColorStop(0, ga('l1', .75)); g.addColorStop(0.5, ga('a', .5)); g.addColorStop(1, ga('d', .45)); }
+  else { g.addColorStop(0, shade(J, 0.4)); g.addColorStop(0.28, shade(J, 0.12)); g.addColorStop(0.62, shade(J, -0.12)); g.addColorStop(1, shade(J, -0.6)); }
   x.fillStyle = g; x.fill();
-  if (ghost) { x.strokeStyle = 'rgba(255,200,120,.95)'; x.lineWidth = Math.max(1, cl * 0.01); x.stroke(); }
+  if (ghost) { x.strokeStyle = ga('l2', .95); x.lineWidth = Math.max(1, cl * 0.01); x.stroke(); }
   x.save(); body(); x.clip();
   // side stripe, shoulder highlight, rocker shadow
-  x.fillStyle = ghost ? 'rgba(255,240,210,.35)' : 'rgba(241,236,224,.92)';
+  x.fillStyle = ghost ? ga('p', .35) : Hc;
   x.beginPath(); mv(0.02, 0.118); ln(0.97, 0.104); ln(0.97, 0.088); ln(0.02, 0.1); x.fill();
-  x.fillStyle = ghost ? 'rgba(255,240,210,.2)' : '#1a1a1a';
+  x.fillStyle = ghost ? ga('p', .2) : isLight(Hc) ? shade(J, -0.6) : shade(J, 0.55);
   x.beginPath(); mv(0.02, 0.098); ln(0.97, 0.086); ln(0.97, 0.081); ln(0.02, 0.093); x.fill();
   x.strokeStyle = 'rgba(255,255,255,.35)'; x.lineWidth = Math.max(1, cl * 0.008);
   x.beginPath(); mv(0.03, 0.172); ln(0.3, 0.17); mv(0.66, 0.188); qc(0.85, 0.172, 0.97, 0.13); x.stroke();
@@ -550,22 +584,22 @@ function buildCar(cl, ghost) {
   // glass
   x.beginPath(); mv(0.365, 0.262); qc(0.38, 0.278, 0.43, 0.279); ln(0.525, 0.276); qc(0.56, 0.272, 0.632, 0.206); ln(0.37, 0.206); x.closePath();
   const gg = x.createLinearGradient(...P(0.4, 0.28), ...P(0.5, 0.2));
-  gg.addColorStop(0, ghost ? 'rgba(40,30,10,.45)' : '#2c3c4e'); gg.addColorStop(1, ghost ? 'rgba(20,14,4,.45)' : '#0b1118');
+  gg.addColorStop(0, ghost ? ga('k1', .45) : '#2c3c4e'); gg.addColorStop(1, ghost ? ga('k2', .45) : '#0b1118');
   x.fillStyle = gg; x.fill();
   x.fillStyle = 'rgba(255,255,255,.16)';
   x.beginPath(); mv(0.44, 0.279); ln(0.47, 0.279); ln(0.42, 0.206); ln(0.39, 0.206); x.fill();
-  x.fillStyle = ghost ? 'rgba(255,181,71,.6)' : '#7a1a12'; x.fillRect(...P(0.5, 0.27), cl * 0.012, cl * 0.065);
+  x.fillStyle = ghost ? ga('a', .6) : shade(J, -0.45); x.fillRect(...P(0.5, 0.27), cl * 0.012, cl * 0.065);
   // hood scoop mouth
   x.fillStyle = '#050505'; x.fillRect(...P(0.818, 0.226), cl * 0.014, cl * 0.03);
   // rear wing on struts
-  x.fillStyle = ghost ? 'rgba(255,181,71,.6)' : '#17181b';
+  x.fillStyle = ghost ? ga('a', .6) : Hc;
   x.fillRect(...P(0.03, 0.235), cl * 0.012, cl * 0.04); x.fillRect(...P(0.09, 0.235), cl * 0.012, cl * 0.04);
   x.beginPath(); mv(-0.015, 0.236); ln(0.13, 0.246); ln(0.13, 0.258); ln(-0.015, 0.252); x.closePath(); x.fill();
   if (!ghost) { x.fillStyle = 'rgba(255,255,255,.25)'; x.fillRect(...P(-0.01, 0.255), cl * 0.13, 1); }
   // door roundel with a plain number
   if (!ghost) {
-    x.fillStyle = '#f1ece0'; x.beginPath(); x.arc(...P(0.48, 0.145), cl * 0.036, 0, Math.PI * 2); x.fill();
-    x.fillStyle = '#141414'; x.font = `900 ${Math.round(cl * 0.05)}px "Big Shoulders Display", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
+    x.fillStyle = Hc; x.beginPath(); x.arc(...P(0.48, 0.145), cl * 0.036, 0, Math.PI * 2); x.fill();
+    x.fillStyle = isLight(Hc) ? '#141414' : '#f1ece0'; x.font = `900 ${Math.round(cl * 0.05)}px "Big Shoulders Display", sans-serif`; x.textAlign = 'center'; x.textBaseline = 'middle';
     x.fillText('1', ...P(0.48, 0.143));
   }
   // lights and the exhaust tip
@@ -917,16 +951,16 @@ function drawCar(sp, nx, gy, s, xm, v, launchAt, flame, now, ghost) {
 }
 
 function wheel(x, y, r, ang, blur, ghost) {
-  ctx.fillStyle = ghost ? 'rgba(30,22,8,.85)' : '#0b0b0c';
+  ctx.fillStyle = ghost ? ga('k3', .85) : '#0b0b0c';
   ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = ghost ? 'rgba(255,181,71,.8)' : '#26282b'; ctx.lineWidth = Math.max(1, r * 0.1);
+  ctx.strokeStyle = ghost ? ga('a', .8) : '#26282b'; ctx.lineWidth = Math.max(1, r * 0.1);
   ctx.beginPath(); ctx.arc(x, y, r * 0.8, 0, Math.PI * 2); ctx.stroke();
-  ctx.fillStyle = ghost ? 'rgba(255,200,120,.5)' : '#8e959c';
+  ctx.fillStyle = ghost ? ga('l2', .5) : '#8e959c';
   ctx.beginPath(); ctx.arc(x, y, r * 0.55, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = ghost ? 'rgba(60,40,10,.6)' : '#4e545a';
+  ctx.fillStyle = ghost ? ga('k4', .6) : '#4e545a';
   ctx.beginPath(); ctx.arc(x, y, r * 0.45, 0, Math.PI * 2); ctx.fill();
   // spokes fade into a blur at speed
-  ctx.strokeStyle = ghost ? 'rgba(255,220,160,.8)' : '#d5dadf'; ctx.lineWidth = Math.max(1, r * 0.11);
+  ctx.strokeStyle = ghost ? ga('l3', .8) : '#d5dadf'; ctx.lineWidth = Math.max(1, r * 0.11);
   ctx.globalAlpha *= 1 - 0.75 * blur;
   ctx.beginPath();
   for (let i = 0; i < 5; i++) { const a = ang + i * Math.PI * 0.4; ctx.moveTo(x + Math.cos(a) * r * 0.12, y + Math.sin(a) * r * 0.12); ctx.lineTo(x + Math.cos(a) * r * 0.5, y + Math.sin(a) * r * 0.5); }
@@ -944,8 +978,8 @@ function ghostLabel(x, y, w) {
   ctx.font = '700 11px Barlow, sans-serif';
   const tw = ctx.measureText(t).width + 14;
   ctx.fillStyle = 'rgba(10,14,12,.75)'; roundRectOn(ctx, x - tw / 2, y - 18, tw, 17, 8); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,181,71,.8)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = '#ffb547'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y - 9.5);
+  ctx.strokeStyle = ga('a', .8); ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = GP.hex; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(t, x, y - 9.5);
   ctx.textBaseline = 'alphabetic';
 }
 
@@ -953,8 +987,8 @@ function edgeArrow(x, y, dir, text) {
   ctx.font = '700 12px Barlow, sans-serif';
   const tw = ctx.measureText(text).width + 30, bx = dir > 0 ? x - tw : x;
   ctx.fillStyle = 'rgba(10,14,12,.78)'; roundRectOn(ctx, bx, y - 12, tw, 24, 12); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,181,71,.85)'; ctx.lineWidth = 1; ctx.stroke();
-  ctx.fillStyle = '#ffb547';
+  ctx.strokeStyle = ga('a', .85); ctx.lineWidth = 1; ctx.stroke();
+  ctx.fillStyle = GP.hex;
   const ax = dir > 0 ? x - 10 : x + 10;
   ctx.beginPath(); ctx.moveTo(ax + dir * 4, y); ctx.lineTo(ax - dir * 4, y - 6); ctx.lineTo(ax - dir * 4, y + 6); ctx.closePath(); ctx.fill();
   ctx.textAlign = dir > 0 ? 'right' : 'left'; ctx.textBaseline = 'middle';
@@ -1073,7 +1107,7 @@ function drawNearWall(now, lay, px) {
   // labels and the race progress bar
   const ty = y + lay.nearH * 0.45;
   ctx.font = '700 12px Barlow, sans-serif'; ctx.textBaseline = 'middle';
-  ctx.fillStyle = '#ffb547'; ctx.textAlign = 'left';
+  ctx.fillStyle = GP.hex; ctx.textAlign = 'left';
   const gh = G.ghost;
   const gname = !gh ? '' : gh.leader ? `Ghost: ${gh.name}, ${gh.daily ? 'today’s' : 'all-time'} leader, ${s3(gh.e)} s` : `Ghost: house car, ${s3(gh.e)} s`;
   ctx.shadowColor = 'rgba(0,0,0,.9)'; ctx.shadowBlur = 4;
@@ -1086,8 +1120,8 @@ function drawNearWall(now, lay, px) {
   const bx = 12, bw = W - 24, by = lay.sceneB - 6;
   ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fillRect(bx, by - 1, bw, 4);
   const pf = clamp(px / L.DIST, 0, 1), gf = clamp(ghostX(now) / L.DIST, 0, 1);
-  ctx.fillStyle = 'rgba(210,58,46,.8)'; ctx.fillRect(bx, by, bw * pf, 2);
-  if (G.ghost) { ctx.strokeStyle = '#ffb547'; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx + gf * bw, by + 1, 3.5, 0, Math.PI * 2); ctx.stroke(); }
+  ctx.fillStyle = ACCENT; ctx.globalAlpha = 0.85; ctx.fillRect(bx, by, bw * pf, 2); ctx.globalAlpha = 1;
+  if (G.ghost) { ctx.strokeStyle = GP.hex; ctx.lineWidth = 2; ctx.beginPath(); ctx.arc(bx + gf * bw, by + 1, 3.5, 0, Math.PI * 2); ctx.stroke(); }
   ctx.fillStyle = '#f1ece0'; ctx.beginPath(); ctx.arc(bx + pf * bw, by + 1, 3.5, 0, Math.PI * 2); ctx.fill();
 }
 

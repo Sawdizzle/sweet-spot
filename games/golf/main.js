@@ -8,6 +8,7 @@ import { dailyRng, mulberry32 } from '../../core/seed/seed.js';
 import { createMeter } from '../../core/meter/meter.js';
 import { nz, tn, coreSfx } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
+import { shade, isLight } from '../../core/ui/teams.js';
 import C from './config.js';
 import { HOLES } from './holes.js';
 import { clamp, dist, dirOf, headingTo, inPoly, polyDist } from './geo.js';
@@ -80,8 +81,39 @@ const shell = mountShell({
     : `I played ${meta ? meta.holes : 0} holes for ${score.toLocaleString()} points in Sweet Spot Golf arcade.`,
   onStart: startRun,
   onAction: tap,
-  onMenu() { G.phase = 'idle'; G.round = null; showControls(false); }
+  onMenu() { G.phase = 'idle'; G.round = null; showControls(false); },
+  colors: { label: 'Colors', default: 'gold' },
+  onTeam: setTeamColors
 });
+
+/* ---------- Team colors ----------
+   No golfer on screen, so the pick colors the player's marks: the flag on
+   the pin, the aim line, the ball glow and trail, and the power fill on the
+   meter. Course colors and the meter's timing zones stay as they are. */
+const lum = hex => { const n = parseInt(hex.slice(1), 16); return 0.299 * (n >> 16) + 0.587 * ((n >> 8) & 255) + 0.114 * (n & 255); };
+const rgbOf = hex => { const n = parseInt(hex.slice(1), 16); return `${n >> 16},${(n >> 8) & 255},${n & 255}`; };
+const TC = {};
+function isGrassy(hex) {
+  const n = parseInt(hex.slice(1), 16), r = n >> 16, g = (n >> 8) & 255, b = n & 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b);
+  if (mx !== g || mx - mn < 50) return false;      // green has to lead and the color has to be saturated
+  const hue = 60 * ((b - r) / (mx - mn) + 2);
+  return hue > 80 && hue < 165;
+}
+function setTeamColors(t) {
+  const main = lum(t.j) >= 60 ? t.j : t.h, trim = main === t.j ? t.h : t.j;
+  TC.flag = main;
+  TC.flagTrim = trim;
+  // a green team color would vanish on the grass and look like the meter's
+  // green sweet spot, so its marks take the trim color instead
+  const mark = isGrassy(main) && lum(trim) >= 60 ? trim : main;
+  TC.accent = lum(mark) < 130 ? shade(mark, 0.35) : mark;   // lifted so it reads on dark grass
+  TC.rgb = rgbOf(TC.accent);
+  // a light team color would leave the white ball with a pale glow on light
+  // green or sand, so ring the ball in a dark edge
+  TC.ballEdge = isLight(TC.accent) ? (isLight(trim) ? '#1b2a22' : trim) : null;
+}
+setTeamColors(shell.team);
 
 /* HUD: course modes show strokes on the hole, arcade shows hearts. */
 const cellOf = el => el && el.closest('.cell');
@@ -541,12 +573,13 @@ function drawPin(now) {
   const side = Math.sin(w.deg * Math.PI / 180) >= 0 ? 1 : -1;
   const wave = Math.sin(now / 180) * 2 * (0.4 + w.mph / 14);
   const fw = 14 + w.mph * 0.4;
-  ctx.fillStyle = '#d23a2e';
+  ctx.fillStyle = TC.flag;
   ctx.beginPath(); ctx.moveTo(x, y - pole); ctx.quadraticCurveTo(x + side * fw * 0.5, y - pole + 2 + wave, x + side * fw, y - pole + 5); ctx.lineTo(x, y - pole + 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = TC.flagTrim; ctx.lineWidth = 1.2; ctx.lineJoin = 'round'; ctx.stroke();
 }
 
 function drawTrail() {
-  ctx.setLineDash([2, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = 'rgba(241,236,224,.35)';
+  ctx.setLineDash([2, 5]); ctx.lineWidth = 1.5; ctx.strokeStyle = `rgba(${TC.rgb},.55)`;
   const n = G.phase === 'flight' ? G.trail.length - 1 : G.trail.length;
   for (let i = 0; i < n; i++) {
     const t = G.trail[i];
@@ -559,17 +592,17 @@ function drawAim(now) {
   if (!['address', 'swing', 'putt'].includes(G.phase)) return;
   const r = G.round, b = r.ball, e = aimEnd();
   const bx = SX(b.x), by = SY(b.y), ex = SX(e.x), ey = SY(e.y);
-  ctx.strokeStyle = 'rgba(255,181,71,.85)'; ctx.lineWidth = 2;
+  ctx.strokeStyle = `rgba(${TC.rgb},.85)`; ctx.lineWidth = 2;
   ctx.setLineDash([7, 6]); ctx.lineDashOffset = -now / 40;
   ctx.beginPath(); ctx.moveTo(bx, by); ctx.lineTo(ex, ey); ctx.stroke();
   ctx.setLineDash([]); ctx.lineDashOffset = 0;
   if (!G.club.putter) {
     const rr = Math.max(6, cam.s * 4);
     ctx.beginPath(); ctx.arc(ex, ey, rr, 0, 7); ctx.stroke();
-    ctx.fillStyle = '#ffb547'; ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, 7); ctx.fill();
+    ctx.fillStyle = TC.accent; ctx.beginPath(); ctx.arc(ex, ey, 2.5, 0, 7); ctx.fill();
   } else {
     const a = Math.atan2(ey - by, ex - bx);
-    ctx.fillStyle = '#ffb547';
+    ctx.fillStyle = TC.accent;
     ctx.beginPath(); ctx.moveTo(ex, ey); ctx.lineTo(ex - Math.cos(a - 0.4) * 10, ey - Math.sin(a - 0.4) * 10); ctx.lineTo(ex - Math.cos(a + 0.4) * 10, ey - Math.sin(a + 0.4) * 10); ctx.fill();
   }
 }
@@ -616,9 +649,10 @@ function drawBall(b) {
   ctx.globalAlpha = clamp(b.fade ?? 1, 0, 1);
   ctx.fillStyle = 'rgba(0,0,0,.4)';
   ctx.beginPath(); ctx.ellipse(x + lift * 0.25, y + 1, base * 1.1, base * 0.7, 0, 0, 7); ctx.fill();
-  ctx.fillStyle = '#fbfaf5'; ctx.shadowColor = 'rgba(255,255,255,.7)'; ctx.shadowBlur = 8;
+  ctx.fillStyle = '#fbfaf5'; ctx.shadowColor = `rgba(${TC.rgb},.95)`; ctx.shadowBlur = 10;
   ctx.beginPath(); ctx.arc(x, y - lift, r, 0, 7); ctx.fill();
-  ctx.shadowBlur = 0; ctx.globalAlpha = 1;
+  ctx.shadowBlur = 0;
+  if (TC.ballEdge) { ctx.strokeStyle = TC.ballEdge; ctx.lineWidth = Math.max(1, r * 0.3); ctx.stroke(); } ctx.globalAlpha = 1;
 }
 
 function drawVignette() {
@@ -679,12 +713,12 @@ function drawSwingBar(now, x, y, w, h) {
   const pw = swing.phase === 'down' || swing.phase === 'done' ? swing.power : null;
   if (swing.phase === 'up') {
     const g = ctx.createLinearGradient(ux(0), 0, ux(1), 0);
-    g.addColorStop(0, 'rgba(255,181,71,.35)'); g.addColorStop(1, 'rgba(255,181,71,.95)');
+    g.addColorStop(0, `rgba(${TC.rgb},.35)`); g.addColorStop(1, `rgba(${TC.rgb},.95)`);
     ctx.fillStyle = g; ctx.fillRect(ux(0), y + 3, ux(v) - ux(0), h - 6);
   }
   if (pw != null) {
-    ctx.fillStyle = 'rgba(255,181,71,.3)'; ctx.fillRect(ux(0), y + 3, ux(pw) - ux(0), h - 6);
-    ctx.fillStyle = '#ffb547'; ctx.fillRect(ux(pw) - 1.5, y - 4, 3, h + 8);
+    ctx.fillStyle = `rgba(${TC.rgb},.3)`; ctx.fillRect(ux(0), y + 3, ux(pw) - ux(0), h - 6);
+    ctx.fillStyle = TC.accent; ctx.fillRect(ux(pw) - 1.5, y - 4, 3, h + 8);
   }
   if (G.marker != null) {
     const mx = ux(G.marker);
@@ -706,7 +740,7 @@ function drawPuttBar(now, x, y, w, h) {
   ctx.fillStyle = 'rgba(241,236,224,.1)'; roundRect(x, y, w, h, 5); ctx.fill();
   const v = G.phase === 'putt' ? putter.value(now) : 0;
   const g = ctx.createLinearGradient(x, 0, x + w, 0);
-  g.addColorStop(0, 'rgba(143,224,160,.4)'); g.addColorStop(1, 'rgba(255,181,71,.95)');
+  g.addColorStop(0, `rgba(${TC.rgb},.35)`); g.addColorStop(1, `rgba(${TC.rgb},.95)`);
   ctx.fillStyle = g; ctx.fillRect(x, y + 3, v * w, h - 6);
   if (G.marker != null) {
     const mx = x + G.marker * w;
