@@ -7,6 +7,16 @@ import { createMeter } from '../../core/meter/meter.js';
 import { nz, tn, coreSfx } from '../../core/audio/audio.js';
 import { mountShell } from '../../core/ui/shell.js';
 import C from './config.js';
+import { drawStadium, drawField, drawNet, drawHolder as artHolder, drawKicker, drawLineman, drawOfficial, drawBall as artBall, COL } from './art.js';
+
+/* Local screenshot hook (localhost only): ?shot=aim|flight&dist=45&hash=L&touch=1&res=good&at=0.55 */
+const LOCAL = /^(localhost|127\.0\.0\.1)$/.test(location.hostname);
+const QS = LOCAL ? new URLSearchParams(location.search) : null;
+const SHOT = QS && QS.get('shot') ? {
+  mode: QS.get('shot'), dist: +QS.get('dist') || 0, hash: QS.get('hash'), touch: QS.get('touch') === '1',
+  res: QS.get('res') || 'good', at: +QS.get('at') || 0.55, wind: QS.get('wind')
+} : null;
+const TL = TOUCH || !!(SHOT && SHOT.touch);            // touch layout
 
 /* ---------- Sound ---------- */
 const sfx = {
@@ -72,6 +82,7 @@ const G = {
   aim: null, power: null, aimRes: null, powRes: null,
   flight: null, t0: 0
 };
+const V = { dist: 35, hash: 'M', kickAt: 0, powerAt: 0 };   // what the camera shows; holds through the result
 const aimMeter = createMeter({ orientation: 'horizontal', speed: 1, zones: [] });
 const powMeter = createMeter({ orientation: 'vertical', mode: 'fill', speed: 1 / C.power.fillSecs, zones: [] });
 
@@ -91,6 +102,8 @@ function rollConditions() {
   G.wind = { mph: Math.round(a * maxW), deg: Math.round(b * 360) };
   G.hash = G.daily ? ['L', 'M', 'R'][Math.floor(c * 3)] : ['L', 'M', 'R'][G.kicks % 3];
   G.wobble = r() < 0.5 ? -1 : 1;
+  if (SHOT && SHOT.hash) G.hash = SHOT.hash;
+  if (SHOT && SHOT.wind) { const [m, d] = SHOT.wind.split(',').map(Number); G.wind = { mph: m || 0, deg: d || 0 }; }
 }
 function windArrow() {
   const d = ((G.wind.deg % 360) + 360) % 360;
@@ -115,6 +128,7 @@ function setupKick(now) {
     ]
   });
   aimMeter.start(now); powMeter.reset();
+  V.dist = G.dist; V.hash = G.hash; V.kickAt = 0;
   G.phase = 'aim'; G.aimRes = null; G.powRes = null; G.flight = null;
   shell.set('dist', G.dist);
   shell.set('wind', G.wind.mph ? `${G.wind.mph} ${windArrow()}` : '0');
@@ -133,6 +147,7 @@ function tap(time) {
     G.aimRes = aimMeter.stop(time);
     sfx.tick();
     powMeter.start(time);
+    V.powerAt = time;
     G.phase = 'power';
   } else if (G.phase === 'power') {
     G.powRes = powMeter.stop(time);
@@ -143,6 +158,7 @@ function tap(time) {
 /* Work out where the ball goes, then animate it there. */
 function kick(now, shank = false) {
   sfx.kick();
+  V.kickAt = now;
   const req = reqPower(), p = shank ? 1 : G.powRes.value;
   const half = opening(), drift = driftYds();
   let aimX = fromBar(G.aimRes.value);
@@ -210,7 +226,7 @@ let cam = { x: 0, y: 4, z: -22, f: 600, hy: 300 };
    is chosen so the ball (near the bottom) and the top of the uprights
    (near the top) both fit on screen. */
 function setCamera(dist, hashX) {
-  const top = 13.3, ballY = H * (TOUCH ? 0.7 : 0.78), postTopY = H * (W < 640 ? 0.22 : 0.18);
+  const top = 13.3, ballY = H * (TL ? 0.7 : 0.78), postTopY = H * (W < 640 ? 0.22 : 0.18);
   cam.z = -(12 + dist * 0.5);
   cam.x = hashX * 0.6;
   const dzB = -cam.z, dzP = dist - cam.z;
@@ -224,117 +240,293 @@ const P = (x, y, z) => {
   return [W / 2 + (x - cam.x) * cam.f / dz, cam.hy + (cam.y - y) * cam.f / dz, cam.f / dz];
 };
 
-/* ---------- Drawing ---------- */
+/* ---------- Drawing ----------
+   The sky, stands, field and net only change when the camera does, so they
+   are drawn once per kick distance, hash and screen size into an offscreen
+   canvas. Each frame blits that and adds the moving parts on top. */
+const bg = document.createElement('canvas'), bgx = bg.getContext('2d');
+let bgKey = '', crowdPts = [], fontsTick = 0;
+if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => { fontsTick++; });
+const PH = { lastNow: 0, confetti: null, flashSeed: 0 };
+
+function hudBottom() {
+  const el = document.getElementById('hud');
+  const r = el ? el.getBoundingClientRect() : null;
+  return r && r.height ? r.bottom + 4 : 90;
+}
+function buildBackground(dist, hashX) {
+  const key = [W, H, DPR, dist, hashX, TL, fontsTick].join('|');
+  if (key === bgKey) return;
+  bgKey = key;
+  const t0 = performance.now();
+  bg.width = Math.round(W * DPR); bg.height = Math.round(H * DPR);
+  bgx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  const zWall = dist + 7, wall = P(0, 0, zWall), wallTop = P(0, 1.5, zWall);
+  const st = drawStadium(bgx, {
+    W, H, baseY: wall[1], wallTop: wallTop[1], cx: wall[0], ppy: wall[2], dist,
+    seed: 4242, hudSafe: Math.min(hudBottom(), wall[1] * 0.4), clearY: P(0, 13.33, dist)[1]
+  });
+  crowdPts = st.pts;
+  drawField(bgx, { P, W, H, dist, zNear: cam.z + 2.5, zWall, hy: cam.hy });
+  drawNet(bgx, P, dist);
+  if (SHOT) window.__bgMs = Math.round(performance.now() - t0);
+}
+
 function drawScene(now) {
-  const dist = G.dist, hashX = HASH_X[G.hash];
+  const dist = V.dist, hashX = HASH_X[V.hash];
   setCamera(dist, hashX);
-  // sky + lights
-  const sky = ctx.createLinearGradient(0, 0, 0, cam.hy);
-  sky.addColorStop(0, '#050b08'); sky.addColorStop(1, '#13261d');
-  ctx.fillStyle = sky; ctx.fillRect(0, 0, W, cam.hy + 2);
-  for (const lx of [0.12, 0.88]) {
-    const g = ctx.createRadialGradient(W * lx, cam.hy * 0.25, 2, W * lx, cam.hy * 0.25, W * 0.35);
-    g.addColorStop(0, 'rgba(255,240,200,.35)'); g.addColorStop(1, 'rgba(255,240,200,0)');
-    ctx.fillStyle = g; ctx.fillRect(0, 0, W, cam.hy);
-    ctx.fillStyle = '#fff8e0'; ctx.fillRect(W * lx - 14, cam.hy * 0.25 - 5, 28, 10);
+  buildBackground(dist, hashX);
+  ctx.drawImage(bg, 0, 0, W, H);
+  const f = G.flight, made = G.phase === 'result' && f && f.result === 'good';
+  const flying = G.phase === 'flight';
+  // crowd shimmer, busier while the ball is in the air and after a make
+  if (!REDUCE) {
+    const boost = made ? 0.25 : flying ? 0.12 : 0;
+    for (const p of crowdPts) {
+      const a = Math.sin(now * p.sp + p.p);
+      if (a > 0.6 - boost) { ctx.fillStyle = `rgba(255,248,230,${Math.min(0.8, (a - 0.6 + boost) * 1.2)})`; ctx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
+    }
   }
-  // stands
-  const standTop = cam.hy - Math.max(26, H * 0.06);
-  ctx.fillStyle = '#0d1813'; ctx.fillRect(0, standTop, W, cam.hy - standTop + 1);
-  ctx.fillStyle = 'rgba(241,236,224,.12)';
-  for (let i = 0; i < 140; i++) { const sx = (i * 97.3) % W, sy = standTop + 3 + ((i * 37) % Math.max(4, cam.hy - standTop - 6)); ctx.fillRect(sx, sy, 2, 2); }
-  // ground
-  ctx.fillStyle = '#1d4a31'; ctx.fillRect(0, cam.hy, W, H - cam.hy);
-  const far = dist + 12, side = 26.67;
-  for (let z = -10; z < far; z += 5) {
-    const a = P(-side, 0, z), b = P(side, 0, z), c = P(side, 0, z + 5), d = P(-side, 0, z + 5);
-    const inEnd = z >= dist - 10 && z < dist;
-    ctx.fillStyle = inEnd ? '#173d29' : (Math.floor((z + 10) / 5) % 2 ? '#22573a' : '#1f5135');
-    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.lineTo(c[0], c[1]); ctx.lineTo(d[0], d[1]); ctx.fill();
+  // camera flashes in the stands
+  if ((made || flying) && crowdPts.length) {
+    const slot = Math.floor(now / 60), n = made ? (REDUCE ? 2 : 6) : 1;
+    for (let i = 0; i < n; i++) {
+      const h = Math.abs(Math.sin(slot * 12.9898 + i * 78.233) * 43758.5453) % 1;
+      if (!made && h > 0.4) continue;
+      const p = crowdPts[Math.floor(h * crowdPts.length)], rr = 3 + p.s * 2;
+      const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, rr * 3);
+      g.addColorStop(0, 'rgba(255,255,255,.95)'); g.addColorStop(0.25, 'rgba(230,240,255,.5)'); g.addColorStop(1, 'rgba(230,240,255,0)');
+      ctx.fillStyle = g; ctx.fillRect(p.x - rr * 3, p.y - rr * 3, rr * 6, rr * 6);
+      ctx.fillStyle = 'rgba(255,255,255,.8)'; ctx.fillRect(p.x - rr * 2, p.y - 0.5, rr * 4, 1); ctx.fillRect(p.x - 0.5, p.y - rr * 2, 1, rr * 4);
+    }
   }
-  ctx.strokeStyle = 'rgba(241,236,224,.55)'; ctx.lineWidth = 1.5;
-  for (let z = dist - 10; z > -10; z -= 5) {          // yard lines from the goal line back
-    const a = P(-side, 0, z), b = P(side, 0, z);
-    ctx.globalAlpha = z === dist - 10 ? 0.95 : 0.5;
-    ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
-  }
-  ctx.globalAlpha = 1;
-  for (const sx of [-side, side]) { const a = P(sx, 0, -10), b = P(sx, 0, dist); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke(); }
-  ctx.fillStyle = 'rgba(241,236,224,.5)';
-  for (let z = dist - 11; z > -10; z--) for (const hx of [-3.08, 3.08]) { const p = P(hx, 0, z); ctx.fillRect(p[0] - p[2] * 0.25, p[1] - 0.5, p[2] * 0.5, 1.2); }
-  drawPosts(dist, now);
-  drawHolder(hashX);
 }
 
-function drawPosts(dist, now) {
-  const z = dist, bar = 3.33, top = bar + 10, half = C.aim.postHalf;
-  const glow = G.phase === 'result' && G.flight && G.flight.result === 'good' ? 1 - (now - G.t0) / 1400 : 0;
-  ctx.lineCap = 'round';
-  const base = P(0, 0, z), cb = P(0, bar, z), l0 = P(-half, bar, z), r0 = P(half, bar, z), l1 = P(-half, top, z), r1 = P(half, top, z);
-  const lw = Math.max(2, base[2] * 0.22);
-  if (glow > 0) { ctx.shadowColor = 'rgba(255,211,77,.9)'; ctx.shadowBlur = 24 * glow; }
-  ctx.strokeStyle = '#ffd34d'; ctx.lineWidth = lw * 1.3;
-  ctx.beginPath(); ctx.moveTo(base[0], base[1]); ctx.lineTo(cb[0], cb[1]); ctx.stroke();
-  ctx.lineWidth = lw;
-  ctx.beginPath(); ctx.moveTo(l0[0], l0[1]); ctx.lineTo(r0[0], r0[1]); ctx.moveTo(l0[0], l0[1]); ctx.lineTo(l1[0], l1[1]); ctx.moveTo(r0[0], r0[1]); ctx.lineTo(r1[0], r1[1]); ctx.stroke();
+/* Players, officials, posts and ball, back to front. */
+function drawActors(now) {
+  const dist = V.dist, hashX = HASH_X[V.hash], f = G.flight;
+  const ball = ballPos(now);
+  const layers = [];
+  const post = G.phase === 'flight' || G.phase === 'result';
+  // officials under the uprights
+  const offPose = !(G.phase === 'result' && f) ? 'down' : f.result === 'good' ? 'good' : 'wave';
+  for (const sx of [-1, 1]) layers.push([dist + 0.8, () => { const p = P(sx * C.aim.postHalf, 0, dist + 0.8); drawOfficial(ctx, p[0], p[1], p[2], offPose, now + sx * 90); }]);
+  layers.push([dist, () => drawPosts(now)]);
+  // the line: rushers face us, blockers show their backs
+  const rise = post ? clamp((now - V.kickAt) / 300, 0, 1) : 0;
+  for (let i = -4; i <= 4; i++) {
+    const z = 8.3 + (i % 2 ? 0.25 : 0), x = hashX + i * 1.12 + 0.3, up = post && Math.abs(i) <= 1;
+    layers.push([z, () => { const p = P(x, 0, z); drawLineman(ctx, p[0], p[1], p[2], { away: true, rise, armsUp: up }); }]);
+  }
+  const nums = ['72', '65', '77', '51', '58', '61', '74', '88', '84'];
+  for (let i = -4; i <= 4; i++) {
+    const z = Math.abs(i) === 4 ? 6.4 : 7, x = hashX + i * (Math.abs(i) === 4 ? 1.15 : 0.98);
+    layers.push([z, () => { const p = P(x, 0, z); drawLineman(ctx, p[0], p[1], p[2], { rise: rise * 0.4, num: nums[i + 4] }); }]);
+  }
+  layers.push([0.05, () => { const p = P(hashX - 0.55, 0, 0.05); artHolder(ctx, p[0], p[1], p[2], { hasBall: !f }); }]);
+  if (!f) layers.push([0, () => { const p = P(hashX, 0.17, 0); artBall(ctx, p[0], p[1], p[2] * 0.17, 0, true); }]);
+  const k = kickerPos(now, hashX);
+  layers.push([k.z, () => { const p = P(k.x, 0, k.z); drawKicker(ctx, p[0], p[1], p[2], k); }]);
+  if (ball) layers.push([ball.z > dist + 0.02 ? ball.z : Math.min(ball.z, dist - 0.01), () => drawBallFlight(ball, now)]);
+  // ground shadow of the ball goes under everyone
+  if (ball) {
+    const sh = P(ball.x, 0, ball.z), hgt = Math.max(0, ball.y);
+    const rr = sh[2] * (0.22 + hgt * 0.02), a = 0.38 / (1 + hgt * 0.12);
+    ctx.save(); ctx.translate(sh[0], sh[1]); ctx.scale(1, 0.32);
+    const g = ctx.createRadialGradient(0, 0, 0, 0, 0, rr);
+    g.addColorStop(0, `rgba(0,0,0,${a})`); g.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = g; ctx.beginPath(); ctx.arc(0, 0, rr, 0, Math.PI * 2); ctx.fill(); ctx.restore();
+  }
+  layers.sort((a, b) => b[0] - a[0]);
+  for (const l of layers) l[1]();
+  drawCelebration(now);
+}
+
+function kickerPos(now, hashX) {
+  const stance = [hashX - 1.45, -2.6], plant = [hashX - 0.34, -0.32];
+  const appr = t => { const p = clamp(t, 0, 1), e = p * p * (3 - 2 * p) * 0.45; return [lerp(stance[0], plant[0], e), lerp(stance[1], plant[1], e)]; };
+  if (G.flight && V.kickAt) {
+    const k = clamp((now - V.kickAt) / 520, 0, 1);
+    const from = appr((V.kickAt - V.powerAt) / 650), m = clamp(k / 0.22, 0, 1);
+    return { x: lerp(from[0], plant[0], m), z: lerp(from[1], plant[1], m), swing: k, t: now };
+  }
+  if (G.phase === 'power') {
+    const p = appr((now - V.powerAt) / 650);
+    return { x: p[0], z: p[1], swing: -1, step: Math.abs(Math.sin((now - V.powerAt) / 140)) * 0.6, t: now };
+  }
+  return { x: stance[0], z: stance[1], swing: -1, step: 0, t: now };
+}
+
+/* Gooseneck goalpost: padded base set back from the end line, a curved
+   neck to the crossbar, shaded uprights and wind ribbons on top. */
+function drawPosts(now) {
+  const z = V.dist, bar = 3.33, top = bar + 10, half = C.aim.postHalf, f = G.flight;
+  const glow = G.phase === 'result' && f && f.result === 'good' ? Math.max(0, 1 - (now - G.t0) / 1400) : 0;
+  let shake = 0, hit = 0;
+  if (f && f.result === 'doink') {
+    const dt = now - f.t0 - f.dur;
+    if (dt > 0) { shake = Math.sin(dt / 26) * Math.exp(-dt / 280) * 0.35; hit = Math.sign(f.finalX); }
+  }
+  const s = P(0, bar, z)[2], lw = Math.max(2.5, s * 0.2);
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  // base pad and gooseneck
+  const zb = z + 2, pb = P(0, 0, zb), pt = P(0, 2, zb), ps = pb[2];
+  const neck = [];
+  for (let i = 0; i <= 14; i++) {
+    const t = i / 14;
+    if (t <= 0.45) neck.push(P(0, lerp(0, 2.55, t / 0.45), zb));
+    else { const u = (t - 0.45) / 0.55, y = (1 - u) * (1 - u) * 2.55 + 2 * u * (1 - u) * 3.45 + u * u * bar, zz = (1 - u) * (1 - u) * zb + 2 * u * (1 - u) * zb + u * u * z; neck.push(P(0, y, zz)); }
+  }
+  const path = pts => { ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); };
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = lw * 1.5 + 2; path(neck); ctx.stroke();
+  ctx.strokeStyle = COL.post; ctx.lineWidth = lw * 1.5; path(neck); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,243,176,.8)'; ctx.lineWidth = Math.max(1, lw * 0.35);
+  ctx.beginPath(); neck.forEach((p, i) => i ? ctx.lineTo(p[0] - lw * 0.3, p[1]) : ctx.moveTo(p[0] - lw * 0.3, p[1])); ctx.stroke();
+  const padW = 0.62 * ps, padH = pb[1] - pt[1];
+  const pg = ctx.createLinearGradient(pb[0] - padW / 2, 0, pb[0] + padW / 2, 0);
+  pg.addColorStop(0, COL.homeDark); pg.addColorStop(0.4, COL.home); pg.addColorStop(0.6, '#c2393b'); pg.addColorStop(1, COL.homeDark);
+  ctx.fillStyle = pg; ctx.fillRect(pb[0] - padW / 2, pt[1], padW, padH);
+  ctx.fillStyle = COL.cream; ctx.fillRect(pb[0] - padW / 2, pt[1] + padH * 0.1, padW, Math.max(1, padH * 0.06));
+  ctx.fillRect(pb[0] - padW / 2, pt[1] + padH * 0.84, padW, Math.max(1, padH * 0.06));
+  // crossbar and uprights
+  const l0 = P(-half, bar, z), r0 = P(half, bar, z);
+  const tipL = P(-half + (hit < 0 ? shake : 0), top, z), tipR = P(half + (hit > 0 ? shake : 0), top, z);
+  const up = (b, t) => { ctx.beginPath(); ctx.moveTo(b[0], b[1]); ctx.quadraticCurveTo(b[0] + (t[0] - b[0]) * 0.2, (b[1] + t[1]) / 2, t[0], t[1]); };
+  if (glow > 0) { ctx.shadowColor = 'rgba(255,211,77,.9)'; ctx.shadowBlur = 26 * glow; }
+  ctx.strokeStyle = 'rgba(0,0,0,.45)'; ctx.lineWidth = lw + 2;
+  ctx.beginPath(); ctx.moveTo(l0[0], l0[1]); ctx.lineTo(r0[0], r0[1]); ctx.stroke(); up(l0, tipL); ctx.stroke(); up(r0, tipR); ctx.stroke();
   ctx.shadowBlur = 0;
-  // wind ribbons on top of each upright
-  const sway = Math.sin(now / 260) * 0.25;
-  const len = 0.6 + G.wind.mph * 0.12, dx = Math.sin(G.wind.deg * Math.PI / 180) * len;
-  for (const p of [l1, r1]) {
-    ctx.strokeStyle = '#d23a2e'; ctx.lineWidth = Math.max(2, p[2] * 0.3);
-    ctx.beginPath(); ctx.moveTo(p[0], p[1]); ctx.quadraticCurveTo(p[0] + dx * p[2] * 0.5, p[1] + (sway + 0.3) * p[2], p[0] + dx * p[2], p[1] + (0.6 + sway) * p[2] * (G.wind.mph ? 0.6 : 2)); ctx.stroke();
+  const cg = ctx.createLinearGradient(0, l0[1] - lw / 2, 0, l0[1] + lw / 2);
+  cg.addColorStop(0, COL.postHi); cg.addColorStop(0.45, COL.post); cg.addColorStop(1, COL.postLo);
+  ctx.strokeStyle = cg; ctx.lineWidth = lw;
+  ctx.beginPath(); ctx.moveTo(l0[0], l0[1]); ctx.lineTo(r0[0], r0[1]); ctx.stroke();
+  for (const [b, t] of [[l0, tipL], [r0, tipR]]) {
+    const ug = ctx.createLinearGradient(b[0] - lw / 2, 0, b[0] + lw / 2, 0);
+    ug.addColorStop(0, COL.postLo); ug.addColorStop(0.35, COL.post); ug.addColorStop(0.55, COL.postHi); ug.addColorStop(1, COL.postLo);
+    ctx.strokeStyle = ug; up(b, t); ctx.stroke();
   }
-}
-
-function drawHolder(hashX) {
-  const b = P(hashX, 0, 0), s = b[2];
-  ctx.fillStyle = 'rgba(0,0,0,.35)';
-  ctx.beginPath(); ctx.ellipse(b[0] - s * 0.9, b[1] + s * 0.05, s * 0.7, s * 0.18, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#e6e1d6';                               // holder: kneeling jersey
-  ctx.beginPath(); ctx.ellipse(b[0] - s * 1.05, b[1] - s * 0.55, s * 0.36, s * 0.5, -0.15, 0, Math.PI * 2); ctx.fill();
-  ctx.fillStyle = '#b0352c';
-  ctx.beginPath(); ctx.arc(b[0] - s * 1.0, b[1] - s * 1.12, s * 0.2, 0, Math.PI * 2); ctx.fill();
-  if (!G.flight) drawBall(b[0], b[1] - s * 0.17, s * 0.17, 0);
-}
-
-function drawBall(x, y, r, spin) {
-  ctx.save(); ctx.translate(x, y); ctx.rotate(spin);
-  ctx.fillStyle = '#8a4a24'; ctx.beginPath(); ctx.ellipse(0, 0, r * 0.62, r, 0, 0, Math.PI * 2); ctx.fill();
-  ctx.strokeStyle = 'rgba(255,255,255,.85)'; ctx.lineWidth = Math.max(1, r * 0.12);
-  ctx.beginPath(); ctx.moveTo(0, -r * 0.45); ctx.lineTo(0, r * 0.45); ctx.stroke();
+  if (glow > 0) {
+    ctx.globalCompositeOperation = 'lighter'; ctx.strokeStyle = `rgba(255,220,120,${0.5 * glow})`; ctx.lineWidth = lw * 2.5;
+    ctx.beginPath(); ctx.moveTo(l0[0], l0[1]); ctx.lineTo(r0[0], r0[1]); ctx.stroke(); up(l0, tipL); ctx.stroke(); up(r0, tipR); ctx.stroke();
+    ctx.globalCompositeOperation = 'source-over';
+  }
   ctx.restore();
+  ribbon(-half + (hit < 0 ? shake : 0), top, z, now, 0);
+  ribbon(half + (hit > 0 ? shake : 0), top, z, now, 1.7);
 }
 
-function drawFlight(now) {
-  const f = G.flight; if (!f) return;
+/* A streamer on top of an upright. It streams with the wind and droops when calm. */
+function ribbon(x, y, z, now, phase) {
+  const mph = G.wind.mph, st = clamp(mph / 14, 0, 1), rad = G.wind.deg * Math.PI / 180;
+  let dx = Math.sin(rad) * st, dy = -(1 - st) * 0.95 - 0.08, dz = Math.cos(rad) * st;
+  const l = Math.hypot(dx, dy, dz); dx /= l; dy /= l; dz /= l;
+  const len = 1.8, N = 10, pts = [];
+  const vertical = Math.abs(dy) > 0.7;
+  for (let i = 0; i <= N; i++) {
+    const d = len * i / N, w = (0.05 + 0.13 * st) * Math.sin(now / (95 - 45 * st) - i * 0.85 + phase) * (i / N);
+    pts.push(P(x + dx * d + (vertical ? w : 0), y + dy * d + (vertical ? 0 : w), z + dz * d));
+  }
+  ctx.save(); ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+  ctx.strokeStyle = '#e8452c'; ctx.lineWidth = Math.max(2.5, pts[0][2] * 0.16);
+  ctx.beginPath(); pts.forEach((p, i) => i ? ctx.lineTo(p[0], p[1]) : ctx.moveTo(p[0], p[1])); ctx.stroke();
+  ctx.strokeStyle = 'rgba(255,200,170,.6)'; ctx.lineWidth = Math.max(0.8, pts[0][2] * 0.04);
+  ctx.stroke(); ctx.restore();
+}
+
+/* Ball position for the current frame, with the same flight math as before.
+   Also settles the kick (resolve) at the same moment it always has. */
+function ballPos(now) {
+  const f = G.flight; if (!f) return null;
+  const dist = V.dist;
   let t = clamp((now - f.t0) / f.dur, 0, 1);
   let x, y, z;
   if (f.result === 'short') {
-    z = f.reach * t; x = f.x0 + (f.aimX - f.x0) * t * (f.reach / G.dist) + f.drift * (t * f.reach / G.dist) ** 2;
+    z = f.reach * t; x = f.x0 + (f.aimX - f.x0) * t * (f.reach / dist) + f.drift * (t * f.reach / dist) ** 2;
     y = 4 * f.apex * 0.75 * t * (1 - t);
   } else {
-    z = G.dist * t; x = f.x0 + (f.aimX - f.x0) * t + f.drift * t * t;
+    z = dist * t; x = f.x0 + (f.aimX - f.x0) * t + f.drift * t * t;
     y = 4 * f.apex * t * (1 - t) + 5.5 * t;
     if (f.result === 'doink' && t >= 1) {                 // bounce back off the post
       const k = clamp((now - f.t0 - f.dur) / 700, 0, 1);
-      z = G.dist - 8 * k; x = f.finalX + Math.sign(f.finalX) * 2 * k; y = 5.5 + 2 * k - 9 * k * k;
+      z = dist - 8 * k; x = f.finalX + Math.sign(f.finalX) * 2 * k; y = 5.5 + 2 * k - 9 * k * k;
+      const kl = 0.9006;                                   // where that arc meets the turf
+      if (k > kl) y = 1.1 * Math.sin(Math.PI * (k - kl) / (1 - kl));
+    } else if (t >= 1) {                                   // carry on past the plane of the posts
+      const e = (now - f.t0 - f.dur) / 1000;
+      if (f.result === 'good') { const m = clamp(e / 0.12, 0, 1); z = dist + 3 * m; y = Math.max(3.8, 5.5 - Math.max(0, e - 0.12) * 4); }
+      else { const tt = 1 + clamp(e, 0, 0.6) * 0.5; z = dist * tt; x = f.x0 + (f.aimX - f.x0) * tt + f.drift * tt * tt; y = Math.max(0, 4 * f.apex * tt * (1 - tt) + 5.5 * tt); }
     }
   }
-  // shadow
-  const sh = P(x, 0, z);
-  ctx.fillStyle = 'rgba(0,0,0,.3)'; ctx.beginPath(); ctx.ellipse(sh[0], sh[1], sh[2] * 0.25, sh[2] * 0.08, 0, 0, Math.PI * 2); ctx.fill();
-  const p = P(x, Math.max(0, y), z);
-  drawBall(p[0], p[1], Math.max(2.2, p[2] * 0.17), (now - f.t0) / 60);
   const done = f.result === 'doink' ? now - f.t0 >= f.dur + 700 : t >= 1;
   if (done && G.phase === 'flight') resolve(now);
-  if (f.result === 'doink' && t >= 1 && !f.clanged) { f.clanged = true; sfx.doink(); }
+  if (f.result === 'doink' && t >= 1 && !f.clanged) { f.clanged = true; f.clangAt = now; sfx.doink(); }
+  const landed = f.result === 'short' && t >= 1;
+  return { x, y: Math.max(0, y), z, t, spin: landed ? 0.4 : (Math.min(now, f.t0 + f.dur + 900) - f.t0) / 70 };
+}
+
+function drawBallFlight(b, now) {
+  const f = G.flight, p = P(b.x, b.y, b.z), r = Math.max(4, p[2] * 0.27);
+  // faint trail from the last few moments of the same path
+  if (G.phase === 'flight' && b.t > 0.02 && f.result !== 'doink' || (f.result === 'doink' && b.t < 1)) {
+    ctx.save(); ctx.lineCap = 'round';
+    let prev = p;
+    for (let i = 1; i <= 9; i++) {
+      const tt = Math.max(0, b.t - i * 0.018);
+      let x, y, z;
+      if (f.result === 'short') { z = f.reach * tt; x = f.x0 + (f.aimX - f.x0) * tt * (f.reach / V.dist) + f.drift * (tt * f.reach / V.dist) ** 2; y = 4 * f.apex * 0.75 * tt * (1 - tt); }
+      else { z = V.dist * tt; x = f.x0 + (f.aimX - f.x0) * tt + f.drift * tt * tt; y = 4 * f.apex * tt * (1 - tt) + 5.5 * tt; }
+      const q = P(x, y, z);
+      ctx.strokeStyle = `rgba(255,244,220,${0.42 * (1 - i / 10)})`; ctx.lineWidth = Math.max(1.2, r * 0.8 * (1 - i / 11));
+      ctx.beginPath(); ctx.moveTo(prev[0], prev[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
+      prev = q;
+    }
+    ctx.restore();
+  }
+  // soft halo so the ball reads against the crowd
+  const hg = ctx.createRadialGradient(p[0], p[1], r * 0.5, p[0], p[1], r * 2.2);
+  hg.addColorStop(0, 'rgba(255,246,225,.55)'); hg.addColorStop(1, 'rgba(255,246,225,0)');
+  ctx.fillStyle = hg; ctx.fillRect(p[0] - r * 2.2, p[1] - r * 2.2, r * 4.4, r * 4.4);
+  artBall(ctx, p[0], p[1], r, b.spin, false, true);
+  // sparks where it rings off the upright
+  if (f.result === 'doink' && f.clangAt && now - f.clangAt < 320) {
+    const k = (now - f.clangAt) / 320, c = P(f.finalX, 5.5, V.dist), rr = c[2] * (0.3 + k * 1.2);
+    ctx.save(); ctx.strokeStyle = `rgba(255,236,170,${1 - k})`; ctx.lineWidth = 2;
+    for (let i = 0; i < 8; i++) {
+      const a = i * Math.PI / 4 + 0.3;
+      ctx.beginPath(); ctx.moveTo(c[0] + Math.cos(a) * rr * 0.4, c[1] + Math.sin(a) * rr * 0.4); ctx.lineTo(c[0] + Math.cos(a) * rr, c[1] + Math.sin(a) * rr); ctx.stroke();
+    }
+    ctx.restore();
+  }
+}
+
+/* Confetti on long makes and perfect kicks. */
+function drawCelebration(now) {
+  const f = G.flight, dt = Math.min(50, now - (PH.lastNow || now)); PH.lastNow = now;
+  const made = G.phase === 'result' && f && f.result === 'good';
+  if (made && !f.confettiDone) {
+    f.confettiDone = true;
+    if (V.dist >= 45 || f.perfect) {
+      const cols = [COL.home, COL.cream, COL.gold, '#ffffff', '#ffb547'], n = REDUCE ? 40 : 140;
+      PH.confetti = Array.from({ length: n }, () => ({
+        x: Math.random() * W, y: -10 - Math.random() * H * 0.25, vx: (Math.random() - 0.5) * 0.08, vy: 0.16 + Math.random() * 0.16,
+        a: Math.random() * 6.28, va: (Math.random() - 0.5) * 0.02, w: 4 + Math.random() * 5, h: 2 + Math.random() * 3,
+        c: cols[(Math.random() * cols.length) | 0], p: Math.random() * 6.28
+      }));
+    }
+  }
+  if (!PH.confetti) return;
+  if (G.phase !== 'result') { PH.confetti = null; return; }
+  for (const q of PH.confetti) {
+    q.x += (q.vx + Math.sin(now / 300 + q.p) * 0.04) * dt; q.y += q.vy * dt; q.a += q.va * dt;
+    ctx.save(); ctx.translate(q.x, q.y); ctx.rotate(q.a); ctx.scale(1, Math.cos(now / 160 + q.p));
+    ctx.fillStyle = q.c; ctx.fillRect(-q.w / 2, -q.h / 2, q.w, q.h); ctx.restore();
+  }
 }
 
 /* Aim bar (bottom) and power bar (right). */
 function drawMeters(now) {
   if (!['aim', 'power', 'flight', 'result'].includes(G.phase)) return;
-  const bw = Math.min(440, W * 0.82), bx = (W - bw) / 2, by = H - (TOUCH ? 150 : 104), bh = 16;
+  const bw = Math.min(440, W * 0.82), bx = (W - bw) / 2, by = H - (TL ? 150 : 104), bh = 16;
   // aim
   ctx.fillStyle = 'rgba(9,22,16,.82)'; roundRect(bx - 10, by - 30, bw + 20, bh + 50, 10); ctx.fill();
   ctx.fillStyle = 'rgba(255,138,122,.35)'; roundRect(bx, by, bw, bh, 6); ctx.fill();
@@ -380,17 +572,35 @@ function roundRect(x, y, w, h, r) {
 
 /* ---------- Loop ---------- */
 function update(now) {
-  if (G.phase === 'idle') { G.dist = 35; G.hash = 'M'; G.wind = { mph: 8, deg: 70 }; }
+  if (G.phase === 'idle') { G.dist = 35; G.hash = 'M'; G.wind = { mph: 8, deg: 70 }; V.dist = 35; V.hash = 'M'; }
   drawScene(now);
-  drawFlight(now);
+  drawActors(now);
   drawMeters(now);
   if (G.phase === 'result' && now - G.t0 > C.resultSecs * 1000) {
     if (G.hearts <= 0) finish(); else setupKick(now);
   }
 }
-function frame(now) { update(now); requestAnimationFrame(frame); }
+function frame(now) {
+  if (SHOT && SHOT.mode === 'flight' && G.flight) now = Math.min(now, G.flight.t0 + SHOT.at * G.flight.dur);
+  update(now); requestAnimationFrame(frame);
+}
 requestAnimationFrame(frame);
 if (REDUCE) C.flightSecs *= 0.7;
+
+/* Screenshot setup for local dev only: start a run at a set distance and hash,
+   and for ?shot=flight fire a kick and hold the clock partway through it. */
+if (SHOT) setTimeout(() => {
+  document.getElementById('play').click();
+  document.getElementById('menu').style.display = 'none';
+  if (SHOT.dist) { G.dist = SHOT.dist; setupKick(performance.now()); }
+  if (SHOT.mode === 'flight') {
+    const now = performance.now(), half = opening(), d = driftYds();
+    const aimX = SHOT.res === 'doink' ? half + 0.05 - d : SHOT.res === 'left' ? -half - 1.5 - d : SHOT.res === 'right' ? half + 1.5 - d : -d;
+    G.aimRes = { value: toBar(aimX), zoneId: 'perfect' };
+    G.powRes = { value: SHOT.res === 'short' ? reqPower() * 0.7 : reqPower() + 0.1, zoneId: 'perfect' };
+    V.powerAt = now - 500; G.phase = 'power'; kick(now);
+  }
+}, 300);
 
 /* Test hook for local dev only. */
 if (/^(localhost|127\.0\.0\.1)$/.test(location.hostname)) window.__game = { G, aimMeter, powMeter, tap, step: update };
