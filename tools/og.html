@@ -34,7 +34,8 @@ const svg = (k, cls = '') => `<svg viewBox="0 0 320 160" preserveAspectRatio="xM
 const card = document.getElementById('card');
 if (g) {
   const title = g.name.split(' ').join('<br>');
-  card.innerHTML = `<div class="left"><div class="brand">Sweet Spot</div><h1>${title}</h1>${seam}<p>${g.blurb}</p></div><div class="art">${svg(g.id)}</div><div class="url">sweetspot.sawman.app${g.path}</div>`;
+  const size = Math.max(...g.name.split(' ').map(w => w.length)) > 6 ? 118 : 150;
+  card.innerHTML = `<div class="left"><div class="brand">Sweet Spot</div><h1 style="font-size:${size}px">${title}</h1>${seam}<p>${g.blurb}</p></div><div class="art">${svg(g.id)}</div><div class="url">sweetspot.sawman.app${g.path}</div>`;
 } else {
   card.innerHTML = `<div class="left"><h1>Sweet<br>Spot</h1>${seam}<p>Six timing games. Hit the small window at exactly the right moment.</p></div><div class="grid">${GAMES.map(x => svg(x.id)).join('')}</div><div class="url">sweetspot.sawman.app</div>`;
 }

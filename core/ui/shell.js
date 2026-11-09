@@ -28,7 +28,7 @@
    shell.playing                     true between onStart and gameOver */
 import { $, TOUCH, store } from '../util.js';
 import { ensureAudio, bindMuteButton, toggleMute } from '../audio/audio.js';
-import { createHearts } from '../hearts/hearts.js';
+import { createHearts, HEART_PLAIN } from '../hearts/hearts.js';
 import { createInitials, savedIni, cleanIni } from '../initials/initials.js';
 import { identity } from '../leaderboard/client.js';
 import { submitScore, getTop, recordLocal, localRuns, better, lowerIsBetter } from '../leaderboard/scores.js';
@@ -101,7 +101,7 @@ export function mountShell(cfg) {
   </div></section>`;
 
   const canvas = $('#field');
-  const hearts = createHearts($('#hearts') || document.createElement('div'), { count: cfg.hearts ?? 3 });
+  const hearts = createHearts($('#hearts') || document.createElement('div'), { count: cfg.hearts ?? 3, svg: cfg.heartSvg || HEART_PLAIN });
   hearts.build();
   bindMuteButton($('#mute'));
 
